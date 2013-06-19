@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="org.eclipse.jdt.core.compilationParticipant">
+      <compilationParticipant
+            class="ca.ecliptical.pde.internal.ds.DSAnnotationCompilationParticipant"
+            id="ca.ecliptical.pde.ds.DSAnnotationCompilationParticipant"
+            requiredSourceLevel="1.6">
+      </compilationParticipant>
+   </extension>
+   <extension
+         point="org.eclipse.ui.keywords">
+      <keyword
+            id="ca.ecliptical.pde.ds"
+            label="%keyword.label">
+      </keyword>
+   </extension>
+   <extension
+         point="org.eclipse.ui.propertyPages">
+      <page
+            class="ca.ecliptical.pde.internal.ds.DSAnnotationPropertyPage"
+            id="ca.ecliptical.pde.ds"
+            name="%property.page.name">
+         <enabledWhen>
+            <adapt
+                  type="org.eclipse.core.resources.IProject">
+               <test
+                     property="org.eclipse.core.resources.projectNature"
+                     value="org.eclipse.pde.PluginNature">
+               </test>
+            </adapt>
+         </enabledWhen>
+         <keywordReference
+               id="ca.ecliptical.pde.ds">
+         </keywordReference>
+      </page>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            class="ca.ecliptical.pde.internal.ds.DSAnnotationPropertyPage"
+            id="ca.ecliptical.pde.ds"
+            name="%preference.page.name">
+         <keywordReference
+               id="ca.ecliptical.pde.ds">
+         </keywordReference>
+      </page>
+   </extension>
+
+</plugin>
