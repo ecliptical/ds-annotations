@@ -14,7 +14,7 @@ import org.eclipse.osgi.util.NLS;
 
 public class Messages extends NLS {
 
-	private static final String BUNDLE_NAME = "ca.ecliptical.pde.ds.messages"; //$NON-NLS-1$
+	private static final String BUNDLE_NAME = "ca.ecliptical.pde.internal.ds.messages"; //$NON-NLS-1$
 
 	public static String DSAnnotationPreferenceListener_jobName;
 
