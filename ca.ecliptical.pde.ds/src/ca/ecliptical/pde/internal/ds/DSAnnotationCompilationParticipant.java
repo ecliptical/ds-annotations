@@ -89,6 +89,15 @@ import org.eclipse.pde.internal.ui.util.PDEModelUtility;
 import org.osgi.framework.Filter;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.InvalidSyntaxException;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Modified;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 
 @SuppressWarnings("restriction")
 public class DSAnnotationCompilationParticipant extends CompilationParticipant {
@@ -97,15 +106,15 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 	private static final String DS_MANIFEST_KEY = "Service-Component"; //$NON-NLS-1$
 
-	private static final String COMPONENT_ANNOTATION = "org.osgi.service.component.annotations.Component"; //$NON-NLS-1$
+	private static final String COMPONENT_ANNOTATION = Component.class.getName();
 
-	private static final String ACTIVATE_ANNOTATION = "org.osgi.service.component.annotations.Activate"; //$NON-NLS-1$
+	private static final String ACTIVATE_ANNOTATION = Activate.class.getName();
 
-	private static final String MODIFIED_ANNOTATION = "org.osgi.service.component.annotations.Modified"; //$NON-NLS-1$
+	private static final String MODIFIED_ANNOTATION = Modified.class.getName();
 
-	private static final String DEACTIVATE_ANNOTATION = "org.osgi.service.component.annotations.Deactivate"; //$NON-NLS-1$
+	private static final String DEACTIVATE_ANNOTATION = Deactivate.class.getName();
 
-	private static final String REFERENCE_ANNOTATION = "org.osgi.service.component.annotations.Reference"; //$NON-NLS-1$
+	private static final String REFERENCE_ANNOTATION = Reference.class.getName();
 
 	private static final QualifiedName PROP_STATE = new QualifiedName(Activator.PLUGIN_ID, "state"); //$NON-NLS-1$
 
@@ -748,7 +757,9 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			String configPolicy = null;
 			if ((value = params.get("configurationPolicy")) instanceof IVariableBinding) { //$NON-NLS-1$
 				IVariableBinding configPolicyBinding = (IVariableBinding) value;
-				configPolicy = configPolicyBinding.getName();
+				ConfigurationPolicy configPolicyLiteral = ConfigurationPolicy.valueOf(configPolicyBinding.getName());
+				if (configPolicyLiteral != null)
+					configPolicy = configPolicyLiteral.toString();
 			}
 
 			String configPid = null;
@@ -920,13 +931,17 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			String cardinality = null;
 			if ((value = params.get("cardinality")) instanceof IVariableBinding) { //$NON-NLS-1$
 				IVariableBinding cardinalityBinding = (IVariableBinding) value;
-				cardinality = cardinalityBinding.getName();
+				ReferenceCardinality cardinalityLiteral = ReferenceCardinality.valueOf(cardinalityBinding.getName());
+				if (cardinalityLiteral != null)
+					cardinality = cardinalityLiteral.toString();
 			}
 
 			String policy = null;
 			if ((value = params.get("policy")) instanceof IVariableBinding) { //$NON-NLS-1$
 				IVariableBinding policyBinding = (IVariableBinding) value;
-				policy = policyBinding.getName();
+				ReferencePolicy policyLiteral = ReferencePolicy.valueOf(policyBinding.getName());
+				if (policyLiteral != null)
+					policy = policyLiteral.toString();
 			}
 
 			String target = null;
@@ -942,7 +957,9 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			String policyOption = null;
 			if ((value = params.get("policyOption")) instanceof IVariableBinding) { //$NON-NLS-1$
 				IVariableBinding policyOptionBinding = (IVariableBinding) value;
-				policyOption = policyOptionBinding.getName();
+				ReferencePolicyOption policyOptionLiteral = ReferencePolicyOption.valueOf(policyOptionBinding.getName());
+				if (policyOptionLiteral != null)
+					policyOption = policyOptionLiteral.toString();
 			}
 
 			String updated = null;
