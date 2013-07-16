@@ -726,7 +726,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			if ((value = params.get("property")) instanceof Object[]) { //$NON-NLS-1$
 				Object[] elements = (Object[]) value;
 				properties = new String[elements.length];
-				System.arraycopy(elements, 0, services, 0, elements.length);
+				System.arraycopy(elements, 0, properties, 0, elements.length);
 			} else {
 				properties = new String[0];
 			}
@@ -735,7 +735,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			if ((value = params.get("properties")) instanceof Object[]) { //$NON-NLS-1$
 				Object[] elements = (Object[]) value;
 				propertyFiles = new String[elements.length];
-				System.arraycopy(elements, 0, services, 0, elements.length);
+				System.arraycopy(elements, 0, propertyFiles, 0, elements.length);
 			} else {
 				propertyFiles = new String[0];
 			}
