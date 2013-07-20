@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.core.resources.ICommand;
+import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
@@ -578,14 +579,12 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 				IPath parentPath = compFile.getParent().getProjectRelativePath();
 				if (!parentPath.isEmpty()) {
 					IFolder folder = javaProject.getProject().getFolder(parentPath);
-					if (!folder.exists()) {
-						try {
-							folder.create(true, true, null);
-						} catch (CoreException e) {
-							Activator.getDefault().getLog().log(e.getStatus());
-							model.dispose();
-							continue;
-						}
+					try {
+						ensureExists(folder);
+					} catch (CoreException e) {
+						Activator.getDefault().getLog().log(e.getStatus());
+						model.dispose();
+						continue;
 					}
 				}
 
@@ -618,6 +617,17 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		newCommands[newCommands.length - 1] = command;
 		description.setBuildSpec(newCommands);
 		project.setDescription(description, null);
+	}
+
+	private void ensureExists(IFolder folder) throws CoreException {
+		if (folder.exists())
+			return;
+
+		IContainer parent = folder.getParent();
+		if (parent != null && parent.getType() == IResource.FOLDER)
+			ensureExists((IFolder) parent);
+
+		folder.create(true, true, null);
 	}
 
 	public static boolean isManaged(IProject project) {
