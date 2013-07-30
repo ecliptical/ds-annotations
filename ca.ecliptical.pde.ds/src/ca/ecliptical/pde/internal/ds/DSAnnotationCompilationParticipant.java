@@ -18,8 +18,10 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.ref.SoftReference;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -48,9 +50,12 @@ import org.eclipse.core.runtime.preferences.IScopeContext;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.IMethod;
+import org.eclipse.jdt.core.ISourceRange;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.SourceRange;
 import org.eclipse.jdt.core.compiler.BuildContext;
 import org.eclipse.jdt.core.compiler.CompilationParticipant;
 import org.eclipse.jdt.core.dom.AST;
@@ -122,6 +127,28 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 	private static final String STATE_FILENAME = "state.dat"; //$NON-NLS-1$
 
 	private static final Debug debug = Debug.getDebug("ds-annotation-builder"); //$NON-NLS-1$
+
+	private static final Comparator<IMethodBinding> SOURCE_ORDER_COMPARATOR = new Comparator<IMethodBinding>() {
+
+		public int compare(IMethodBinding o1, IMethodBinding o2) {
+			try {
+				IMethod m1 = (IMethod) o1.getJavaElement();
+				IMethod m2 = (IMethod) o2.getJavaElement();
+				if (m1 == null || m2 == null)
+					return 0;
+
+				ISourceRange range1 = m1.getSourceRange();
+				ISourceRange range2 = m2.getSourceRange();
+
+				if (!SourceRange.isAvailable(range1) || !SourceRange.isAvailable(range2))
+					return m1.getElementName().compareTo(m2.getElementName());
+
+				return range1.getOffset() - range2.getOffset();
+			} catch (JavaModelException e) {
+				return 0;
+			}
+		}
+	};
 
 	private final Map<IJavaProject, ProjectContext> processingContext = Collections.synchronizedMap(new HashMap<IJavaProject, ProjectContext>());
 
@@ -869,6 +896,10 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			String activate = null;
 			String deactivate = null;
 			String modified = null;
+
+			IMethodBinding[] declaredMethods = type.getDeclaredMethods();
+			Arrays.sort(declaredMethods, SOURCE_ORDER_COMPARATOR);
+
 			for (IMethodBinding method : type.getDeclaredMethods()) {
 				for (IAnnotationBinding methodAnnotation : method.getAnnotations()) {
 					String annotationName = methodAnnotation.getAnnotationType().getQualifiedName();
