@@ -18,7 +18,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.ref.SoftReference;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -50,12 +49,9 @@ import org.eclipse.core.runtime.preferences.IScopeContext;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
-import org.eclipse.jdt.core.IMethod;
-import org.eclipse.jdt.core.ISourceRange;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
-import org.eclipse.jdt.core.SourceRange;
 import org.eclipse.jdt.core.compiler.BuildContext;
 import org.eclipse.jdt.core.compiler.CompilationParticipant;
 import org.eclipse.jdt.core.dom.AST;
@@ -128,25 +124,10 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 	private static final Debug debug = Debug.getDebug("ds-annotation-builder"); //$NON-NLS-1$
 
-	private static final Comparator<IMethodBinding> SOURCE_ORDER_COMPARATOR = new Comparator<IMethodBinding>() {
+	private static final Comparator<IDSReference> REF_NAME_COMPARATOR = new Comparator<IDSReference>() {
 
-		public int compare(IMethodBinding o1, IMethodBinding o2) {
-			try {
-				IMethod m1 = (IMethod) o1.getJavaElement();
-				IMethod m2 = (IMethod) o2.getJavaElement();
-				if (m1 == null || m2 == null)
-					return 0;
-
-				ISourceRange range1 = m1.getSourceRange();
-				ISourceRange range2 = m2.getSourceRange();
-
-				if (!SourceRange.isAvailable(range1) || !SourceRange.isAvailable(range2))
-					return m1.getElementName().compareTo(m2.getElementName());
-
-				return range1.getOffset() - range2.getOffset();
-			} catch (JavaModelException e) {
-				return 0;
-			}
+		public int compare(IDSReference o1, IDSReference o2) {
+			return o1.getReferenceName().compareTo(o2.getReferenceName());
 		}
 	};
 
@@ -896,9 +877,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			String activate = null;
 			String deactivate = null;
 			String modified = null;
-
-			IMethodBinding[] declaredMethods = type.getDeclaredMethods();
-			Arrays.sort(declaredMethods, SOURCE_ORDER_COMPARATOR);
+			ArrayList<IDSReference> references = new ArrayList<IDSReference>();
 
 			for (IMethodBinding method : type.getDeclaredMethods()) {
 				for (IAnnotationBinding methodAnnotation : method.getAnnotations()) {
@@ -919,7 +898,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 					}
 
 					if (REFERENCE_ANNOTATION.equals(annotationName)) {
-						processReference(method, methodAnnotation, component);
+						processReference(method, methodAnnotation, dsFactory, references);
 						break;
 					}
 				}
@@ -934,10 +913,18 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			if (modified != null)
 				component.setModifiedeMethod(modified);
 
+			if (!references.isEmpty()) {
+				// references must be declared in ascending lexicographical order of their names
+				Collections.sort(references, REF_NAME_COMPARATOR);
+				for (IDSReference reference : references) {
+					component.addReference(reference);
+				}
+			}
+
 			return model;
 		}
 
-		private void processReference(IMethodBinding method, IAnnotationBinding annotation, IDSComponent component) {
+		private void processReference(IMethodBinding method, IAnnotationBinding annotation, IDSDocumentFactory factory, Collection<IDSReference> collector) {
 			ITypeBinding[] argTypes = method.getParameterTypes();
 			if (argTypes.length < 1)
 				return;
@@ -990,9 +977,30 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 				target = (String) value;
 			}
 
-			String unbind = null;
+			String unbind;
 			if ((value = params.get("unbind")) instanceof String) { //$NON-NLS-1$
-				unbind = (String) value;
+				String unbindValue = (String) value;
+				unbind = "-".equals(unbindValue) ? null : unbindValue; //$NON-NLS-1$
+			} else {
+				String unbindCandidate;
+				if (method.getName().startsWith("add")) { //$NON-NLS-1$
+					unbindCandidate = "remove" + method.getName().substring("add".length()); //$NON-NLS-1$ //$NON-NLS-2$
+				} else {
+					unbindCandidate = "un" + method.getName(); //$NON-NLS-1$
+				}
+
+				// verify that the method exists
+				unbind = null;
+				ITypeBinding testedClass = method.getDeclaringClass();
+				TYPE_LOOP: do {
+					for (IMethodBinding declaredMethod : testedClass.getDeclaredMethods()) {
+						if (unbindCandidate.equals(declaredMethod.getName())) {
+							// TODO validate method signature?
+							unbind = unbindCandidate;
+							break TYPE_LOOP;
+						}
+					}
+				} while ((testedClass = testedClass.getSuperclass()) != null);
 			}
 
 			String policyOption = null;
@@ -1003,13 +1011,38 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 					policyOption = policyOptionLiteral.toString();
 			}
 
-			String updated = null;
+			String updated;
 			if ((value = params.get("updated")) instanceof String) { //$NON-NLS-1$
-				updated = (String) value;
+				String updatedValue = (String) value;
+				updated = "-".equals(updatedValue) ? null : updatedValue; //$NON-NLS-1$
+			} else {
+				String updatedCandidate;
+				if (method.getName().startsWith("bind")) { //$NON-NLS-1$
+					updatedCandidate = "updated" + method.getName().substring("bind".length()); //$NON-NLS-1$ //$NON-NLS-2$
+				} else if (method.getName().startsWith("set")) { //$NON-NLS-1$
+					updatedCandidate = "updated" + method.getName().substring("set".length()); //$NON-NLS-1$ //$NON-NLS-2$
+				} else if (method.getName().startsWith("add")) { //$NON-NLS-1$
+					updatedCandidate = "updated" + method.getName().substring("add".length()); //$NON-NLS-1$ //$NON-NLS-2$
+				} else {
+					updatedCandidate = "updated" + method.getName(); //$NON-NLS-1$
+				}
+
+				// verify that the method exists
+				updated = null;
+				ITypeBinding testedClass = method.getDeclaringClass();
+				TYPE_LOOP: do {
+					for (IMethodBinding declaredMethod : testedClass.getDeclaredMethods()) {
+						if (updatedCandidate.equals(declaredMethod.getName())) {
+							// TODO validate method signature?
+							updated = updatedCandidate;
+							break TYPE_LOOP;
+						}
+					}
+				} while ((testedClass = testedClass.getSuperclass()) != null);
 			}
 
-			IDSReference reference = component.getModel().getFactory().createReference();
-			component.addReference(reference);
+			IDSReference reference = factory.createReference();
+			collector.add(reference);
 
 			reference.setReferenceBind(method.getName());
 

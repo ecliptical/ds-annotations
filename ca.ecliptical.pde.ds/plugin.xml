@@ -6,7 +6,7 @@
       <compilationParticipant
             class="ca.ecliptical.pde.internal.ds.DSAnnotationCompilationParticipant"
             id="ca.ecliptical.pde.ds.DSAnnotationCompilationParticipant"
-            requiredSourceLevel="1.6">
+            requiredSourceLevel="1.5">
       </compilationParticipant>
    </extension>
    <extension
