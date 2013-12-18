@@ -16,11 +16,63 @@ public class Messages extends NLS {
 
 	private static final String BUNDLE_NAME = "ca.ecliptical.pde.internal.ds.messages"; //$NON-NLS-1$
 
+	public static String DSAnnotationCompilationParticipant_duplicateLifeCycleMethodParameterType;
+
+	public static String DSAnnotationCompilationParticipant_inconsistentComponentPropertyType;
+
+	public static String DSAnnotationCompilationParticipant_invalidBindMethodParameters;
+
+	public static String DSAnnotationCompilationParticipant_invalidBindMethodReturnType;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentConfigurationPid;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentDescriptorNamespace;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentFactoryName;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentImplementationClass;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentName;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentProperty_nameRequired;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentProperty_valueRequired;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentPropertyFile;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentPropertyType;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentPropertyValue;
+
+	public static String DSAnnotationCompilationParticipant_invalidComponentService;
+
+	public static String DSAnnotationCompilationParticipant_invalidLifeCycleMethodParameterType;
+
+	public static String DSAnnotationCompilationParticipant_invalidLifeCycleMethodReturnType;
+
+	public static String DSAnnotationCompilationParticipant_invalidReferenceService;
+
+	public static String DSAnnotationCompilationParticipant_invalidReferenceUnbind;
+
+	public static String DSAnnotationCompilationParticipant_invalidReferenceUpdated;
+
+	public static String DSAnnotationCompilationParticipant_stringOrEmpty;
+
+	public static String DSAnnotationCompilationParticipant_unknownServiceTypeLabel;
+
 	public static String DSAnnotationPreferenceListener_jobName;
 
 	public static String DSAnnotationPreferenceListener_taskName;
 
 	public static String DSAnnotationPropertyPage_enableCheckbox_text;
+
+	public static String DSAnnotationPropertyPage_errorLevelError;
+
+	public static String DSAnnotationPropertyPage_errorLevelLabel_text;
+
+	public static String DSAnnotationPropertyPage_errorLevelNone;
+
+	public static String DSAnnotationPropertyPage_errorLevelWarning;
 
 	public static String DSAnnotationPropertyPage_errorMessage_path;
 

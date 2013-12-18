@@ -30,6 +30,7 @@ import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
@@ -57,6 +58,8 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 	private Button enableCheckbox;
 
 	private Text pathText;
+
+	private Combo errorLevelCombo;
 
 	private IWorkingCopyManager wcManager;
 
@@ -171,6 +174,17 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 		pathText = new Text(composite, SWT.BORDER | SWT.SINGLE);
 		pathText.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
 
+		Label errorLevelLabel = new Label(composite, SWT.RIGHT);
+		errorLevelLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false));
+		errorLevelLabel.setText(Messages.DSAnnotationPropertyPage_errorLevelLabel_text);
+
+		errorLevelCombo = new Combo(composite, SWT.DROP_DOWN | SWT.READ_ONLY | SWT.BORDER);
+		errorLevelCombo.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, true, false));
+		errorLevelCombo.add(Messages.DSAnnotationPropertyPage_errorLevelError);
+		errorLevelCombo.add(Messages.DSAnnotationPropertyPage_errorLevelWarning);
+		errorLevelCombo.add(Messages.DSAnnotationPropertyPage_errorLevelNone);
+		errorLevelCombo.select(0);
+
 		Dialog.applyDialogFont(composite);
 		return composite;
 	}
@@ -180,6 +194,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 		boolean enableValue = prefs.getBoolean(Activator.PREF_ENABLED, true);
 		String pathValue = prefs.get(Activator.PREF_PATH, Activator.DEFAULT_PATH);
+		int errorLevel = prefs.getInt(Activator.PREF_ERROR_LEVEL, 0);
 
 		if (useProjectSettings()) {
 			IScopeContext scopeContext = new ProjectScope(getProject());
@@ -187,10 +202,12 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			enableValue = prefs.getBoolean(Activator.PREF_ENABLED, enableValue);
 			pathValue = prefs.get(Activator.PREF_PATH, pathValue);
+			errorLevel = prefs.getInt(Activator.PREF_ERROR_LEVEL, errorLevel);
 		}
 
 		enableCheckbox.setSelection(enableValue);
 		pathText.setText(pathValue);
+		errorLevelCombo.select(errorLevel);
 
 		setErrorMessage(null);
 	}
@@ -296,6 +313,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			prefs.putBoolean(Activator.PREF_ENABLED, enableCheckbox.getSelection());
 			prefs.put(Activator.PREF_PATH, new Path(path).toString());
+			prefs.putInt(Activator.PREF_ERROR_LEVEL, errorLevelCombo.getSelectionIndex());
 		}
 
 		try {

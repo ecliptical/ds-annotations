@@ -24,6 +24,8 @@ public class ProjectState implements Serializable {
 
 	private String path;
 
+	private int errorLevel;
+
 	public Map<String, Collection<String>> getMappings() {
 		return mappings;
 	}
@@ -36,6 +38,14 @@ public class ProjectState implements Serializable {
 		this.path = path;
 	}
 
+	public int getErrorLevel() {
+		return errorLevel;
+	}
+
+	public void setErrorLevel(int errorLevel) {
+		this.errorLevel = errorLevel;
+	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (obj == this)
@@ -46,6 +56,7 @@ public class ProjectState implements Serializable {
 
 		ProjectState o = (ProjectState) obj;
 		return (path == null ? o.path == null : path.equals(o.path))
+				&& errorLevel == o.errorLevel
 				&& mappings.equals(o.mappings);
 	}
 
@@ -53,7 +64,8 @@ public class ProjectState implements Serializable {
 	public String toString() {
 		StringBuilder buf = new StringBuilder("ProjectState[path="); //$NON-NLS-1$
 		buf.append(path).append(";mappings="); //$NON-NLS-1$
-		buf.append(mappings).append(']');
+		buf.append(mappings).append(";errorLevel="); //$NON-NLS-1$
+		buf.append(errorLevel).append(']');
 		return buf.toString();
 	}
 }

@@ -5,8 +5,12 @@
          point="org.eclipse.jdt.core.compilationParticipant">
       <compilationParticipant
             class="ca.ecliptical.pde.internal.ds.DSAnnotationCompilationParticipant"
+            createsProblems="true"
             id="ca.ecliptical.pde.ds.DSAnnotationCompilationParticipant"
             requiredSourceLevel="1.5">
+         <managedMarker
+               markerType="ca.ecliptical.pde.ds.problem">
+         </managedMarker>
       </compilationParticipant>
    </extension>
    <extension
@@ -46,6 +50,17 @@
                id="ca.ecliptical.pde.ds">
          </keywordReference>
       </page>
+   </extension>
+   <extension
+         id="problem"
+         name="%problem.marker.name"
+         point="org.eclipse.core.resources.markers">
+      <super
+            type="org.eclipse.jdt.core.problem">
+      </super>
+      <persistent
+            value="true">
+      </persistent>
    </extension>
 
 </plugin>

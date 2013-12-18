@@ -22,6 +22,8 @@ public class Activator extends AbstractUIPlugin {
 
 	public static final String PREF_PATH = "path"; //$NON-NLS-1$
 
+	public static final String PREF_ERROR_LEVEL = "errorLevel"; //$NON-NLS-1$
+
 	public static final String DEFAULT_PATH = "OSGI-INF"; //$NON-NLS-1$
 
 	// The shared instance
