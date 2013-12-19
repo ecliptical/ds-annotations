@@ -113,9 +113,9 @@ public class AnnotationProcessor extends ASTRequestor {
 
 	private final Map<ICompilationUnit, BuildContext> fileMap;
 
-	private final int errorLevel;
+	private final ValidationErrorLevel errorLevel;
 
-	public AnnotationProcessor(Map<ICompilationUnit, Collection<IDSModel>> models, Map<ICompilationUnit, BuildContext> fileMap, int errorLevel) {
+	public AnnotationProcessor(Map<ICompilationUnit, Collection<IDSModel>> models, Map<ICompilationUnit, BuildContext> fileMap, ValidationErrorLevel errorLevel) {
 		this.models = models;
 		this.fileMap = fileMap;
 		this.errorLevel = errorLevel;
@@ -150,8 +150,8 @@ public class AnnotationProcessor extends ASTRequestor {
 		if (type.isInterface()
 				|| type.isLocalTypeDeclaration()
 				|| !Modifier.isPublic(type.getModifiers())) {
-			if (errorLevel > 1)
-				return;
+			if (errorLevel.isNone())
+				return;	// interfaces, local types and non-public types cannot be (or have nested) components
 
 			invalid = true;
 			Annotation annotation = findComponentAnnotation(type);
@@ -159,6 +159,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				reportProblem(annotation, null, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
 		}
 
+		// recurse into nested types
 		for (Object element : type.getTypes()) {
 			if (!(element instanceof TypeDeclaration))
 				continue;
@@ -169,8 +170,8 @@ public class AnnotationProcessor extends ASTRequestor {
 		if (Modifier.isAbstract(type.getModifiers())
 				|| (!type.isPackageMemberTypeDeclaration()
 						&& !Modifier.isStatic(type.getModifiers()))) {
-			if (errorLevel > 1)
-				return;
+			if (errorLevel.isNone())
+				return;	// abstract types and non-static nested types cannot be components
 
 			invalid = true;
 			Annotation annotation = findComponentAnnotation(type);
@@ -373,7 +374,7 @@ public class AnnotationProcessor extends ASTRequestor {
 						property.setPropertyValue(null);
 					}
 
-					if (errorLevel < 2) {
+					if (!errorLevel.isNone()) {
 						String expected = property.getPropertyType() == null || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.DSAnnotationCompilationParticipant_stringOrEmpty : property.getPropertyType();
 						String actual = propertyType == null || String.class.getSimpleName().equals(propertyType) ? Messages.DSAnnotationCompilationParticipant_stringOrEmpty : propertyType;
 						if (!actual.equals(expected))
@@ -455,22 +456,22 @@ public class AnnotationProcessor extends ASTRequestor {
 	}
 
 	private void validateComponentName(Annotation annotation, String name, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel < 2 && !PID_PATTERN.matcher(name).matches())
+		if (!errorLevel.isNone() && !PID_PATTERN.matcher(name).matches())
 			reportProblem(annotation, "name", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentName, name), name); //$NON-NLS-1$
 	}
 
 	private void validateComponentService(Annotation annotation, ITypeBinding componentType, ITypeBinding serviceType, int index, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel < 2 && !componentType.isAssignmentCompatible(serviceType))
+		if (!errorLevel.isNone() && !componentType.isAssignmentCompatible(serviceType))
 			reportProblem(annotation, "service", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentService, serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
 	}
 
 	private void validateComponentFactory(Annotation annotation, String factory, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel < 2 && !PID_PATTERN.matcher(factory).matches())
+		if (!errorLevel.isNone() && !PID_PATTERN.matcher(factory).matches())
 			reportProblem(annotation, "factory", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentFactoryName, factory), factory); //$NON-NLS-1$
 	}
 
 	private void validateComponentProperty(Annotation annotation, String name, String type, String value, int index, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel > 1)
+		if (errorLevel.isNone())
 			return;
 
 		if (PROPERTY_TYPES.contains(type)) {
@@ -503,7 +504,7 @@ public class AnnotationProcessor extends ASTRequestor {
 	}
 
 	private void validateComponentPropertyFiles(Annotation annotation, IProject project, String[] files, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel > 1)
+		if (errorLevel.isNone())
 			return;
 
 		for (int i = 0; i < files.length; ++i) {
@@ -515,17 +516,17 @@ public class AnnotationProcessor extends ASTRequestor {
 	}
 
 	private void validateComponentXMLNS(Annotation annotation, String xmlns, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel < 2 && IDSConstants.NAMESPACE.equals(xmlns))
+		if (!errorLevel.isNone() && IDSConstants.NAMESPACE.equals(xmlns))
 			reportProblem(annotation, "xmlns", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentDescriptorNamespace, xmlns), xmlns); //$NON-NLS-1$
 	}
 
 	private void validateComponentConfigPID(Annotation annotation, String configPid, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel < 2 && !PID_PATTERN.matcher(configPid).matches())
+		if (!errorLevel.isNone() && !PID_PATTERN.matcher(configPid).matches())
 			reportProblem(annotation, "configurationPid", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentConfigurationPid, configPid), configPid); //$NON-NLS-1$
 	}
 
 	private void validateLifeCycleMethod(Annotation annotation, String methodName, IMethodBinding methodBinding, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel > 1)
+		if (errorLevel.isNone())
 			return;
 
 		String returnTypeName = methodBinding.getReturnType().getName();
@@ -589,23 +590,31 @@ public class AnnotationProcessor extends ASTRequestor {
 		Object value;
 		if ((value = params.get("service")) instanceof ITypeBinding) { //$NON-NLS-1$
 			serviceType = (ITypeBinding) value;
-			if (errorLevel < 2
-					&& argTypes.length > 0
-					&& !ServiceReference.class.getName().equals(argTypes[0].getErasure().getQualifiedName())
-					&& !serviceType.isAssignmentCompatible(argTypes[0]))
-				reportProblem(annotation, "service", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceService, argTypes[0].getName(), serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
+			if (!errorLevel.isNone() && argTypes.length > 0) {
+				ITypeBinding[] typeArgs;
+				if (!(ServiceReference.class.getName().equals(argTypes[0].getErasure().getQualifiedName())
+						&& ((typeArgs = argTypes[0].getTypeArguments()).length == 0 || serviceType.isAssignmentCompatible(typeArgs[0])))
+						&& !serviceType.isAssignmentCompatible(argTypes[0]))
+					reportProblem(annotation, "service", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceService, argTypes[0].getName(), serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
+			}
 		} else if (argTypes.length > 0) {
 			if (ServiceReference.class.getName().equals(argTypes[0].getErasure().getQualifiedName())) {
 				ITypeBinding[] typeArgs = argTypes[0].getTypeArguments();
 				if (typeArgs.length > 0)
 					serviceType = typeArgs[0];
 				else
-					serviceType = method.getAST().resolveWellKnownType(Object.class.getName());
+					serviceType = null;
 			} else {
 				serviceType = argTypes[0].isPrimitive() ? getObjectType(method.getAST(), argTypes[0]) : argTypes[0];
 			}
 		} else {
 			serviceType = null;
+		}
+
+		if (serviceType == null) {
+			reportProblem(annotation, null, problems, Messages.AnnotationProcessor_invalidReferenceServiceUnknown);
+
+			serviceType = method.getAST().resolveWellKnownType(Object.class.getName());
 		}
 
 		validateReferenceBindMethod(annotation, serviceType, methodBinding, problems);
@@ -655,7 +664,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				unbind = null;
 			} else {
 				unbind = unbindValue;
-				if (errorLevel < 2 && serviceType != null) {
+				if (!errorLevel.isNone() && serviceType != null) {
 					IMethodBinding unbindMethod = findReferenceMethod(methodBinding.getDeclaringClass(), serviceType, unbind);
 					if (unbindMethod == null)
 						reportProblem(annotation, "unbind", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceUnbind, unbind), unbind); //$NON-NLS-1$
@@ -693,7 +702,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				updated = null;
 			} else {
 				updated = updatedValue;
-				if (errorLevel < 2 && serviceType != null) {
+				if (!errorLevel.isNone() && serviceType != null) {
 					IMethodBinding updatedMethod = findReferenceMethod(methodBinding.getDeclaringClass(), serviceType, updated);
 					if (updatedMethod == null)
 						reportProblem(annotation, "updated", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceUpdated, updated), updated); //$NON-NLS-1$
@@ -779,7 +788,7 @@ public class AnnotationProcessor extends ASTRequestor {
 	}
 
 	private void validateReferenceBindMethod(Annotation annotation, ITypeBinding serviceType, IMethodBinding methodBinding, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel > 1)
+		if (errorLevel.isNone())
 			return;
 
 		String returnTypeName = methodBinding.getReturnType().getName();
@@ -806,7 +815,7 @@ public class AnnotationProcessor extends ASTRequestor {
 	}
 
 	private void validateReferenceTarget(Annotation annotation, String target, Collection<DSAnnotationProblem> problems) {
-		if (errorLevel > 1)
+		if (errorLevel.isNone())
 			return;
 
 		try {
@@ -880,7 +889,7 @@ public class AnnotationProcessor extends ASTRequestor {
 	}
 
 	private void reportProblem(Annotation annotation, String member, int valueIndex, Collection<DSAnnotationProblem> problems, String message, String... args) {
-		if (errorLevel > 1)
+		if (errorLevel.isNone())
 			return;
 
 		Expression memberValue = annotation;
@@ -911,7 +920,7 @@ public class AnnotationProcessor extends ASTRequestor {
 		}
 
 		if (start >= 0) {
-			DSAnnotationProblem problem = new DSAnnotationProblem(errorLevel == 0, message, args);
+			DSAnnotationProblem problem = new DSAnnotationProblem(errorLevel.isError(), message, args);
 			problem.setSourceStart(start);
 			problem.setSourceEnd(start + length - 1);
 			problems.add(problem);

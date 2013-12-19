@@ -16,6 +16,8 @@ public class Messages extends NLS {
 
 	private static final String BUNDLE_NAME = "ca.ecliptical.pde.internal.ds.messages"; //$NON-NLS-1$
 
+	public static String AnnotationProcessor_invalidReferenceServiceUnknown;
+
 	public static String DSAnnotationCompilationParticipant_duplicateLifeCycleMethodParameterType;
 
 	public static String DSAnnotationCompilationParticipant_inconsistentComponentPropertyType;

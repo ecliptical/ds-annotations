@@ -194,7 +194,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 		boolean enableValue = prefs.getBoolean(Activator.PREF_ENABLED, true);
 		String pathValue = prefs.get(Activator.PREF_PATH, Activator.DEFAULT_PATH);
-		int errorLevel = prefs.getInt(Activator.PREF_ERROR_LEVEL, 0);
+		int errorLevel = prefs.getInt(Activator.PREF_VALIDATION_ERROR_LEVEL, 0);
 
 		if (useProjectSettings()) {
 			IScopeContext scopeContext = new ProjectScope(getProject());
@@ -202,7 +202,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			enableValue = prefs.getBoolean(Activator.PREF_ENABLED, enableValue);
 			pathValue = prefs.get(Activator.PREF_PATH, pathValue);
-			errorLevel = prefs.getInt(Activator.PREF_ERROR_LEVEL, errorLevel);
+			errorLevel = prefs.getInt(Activator.PREF_VALIDATION_ERROR_LEVEL, errorLevel);
 		}
 
 		enableCheckbox.setSelection(enableValue);
@@ -313,7 +313,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			prefs.putBoolean(Activator.PREF_ENABLED, enableCheckbox.getSelection());
 			prefs.put(Activator.PREF_PATH, new Path(path).toString());
-			prefs.putInt(Activator.PREF_ERROR_LEVEL, errorLevelCombo.getSelectionIndex());
+			prefs.putInt(Activator.PREF_VALIDATION_ERROR_LEVEL, errorLevelCombo.getSelectionIndex());
 		}
 
 		try {

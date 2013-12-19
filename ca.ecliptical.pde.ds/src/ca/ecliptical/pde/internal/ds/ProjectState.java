@@ -24,7 +24,7 @@ public class ProjectState implements Serializable {
 
 	private String path;
 
-	private int errorLevel;
+	private ValidationErrorLevel errorLevel;
 
 	public Map<String, Collection<String>> getMappings() {
 		return mappings;
@@ -38,11 +38,11 @@ public class ProjectState implements Serializable {
 		this.path = path;
 	}
 
-	public int getErrorLevel() {
-		return errorLevel;
+	public ValidationErrorLevel getErrorLevel() {
+		return errorLevel == null ?  ValidationErrorLevel.error : errorLevel;
 	}
 
-	public void setErrorLevel(int errorLevel) {
+	public void setErrorLevel(ValidationErrorLevel errorLevel) {
 		this.errorLevel = errorLevel;
 	}
 
