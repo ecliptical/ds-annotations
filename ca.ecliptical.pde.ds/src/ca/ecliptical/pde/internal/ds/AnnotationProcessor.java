@@ -398,9 +398,14 @@ public class AnnotationProcessor extends ASTRequestor {
 		}
 
 		String activate = null;
+		Annotation activateAnnotation = null;
 		String deactivate = null;
+		Annotation deactivateAnnotation = null;
 		String modified = null;
+		Annotation modifiedAnnotation = null;
+
 		ArrayList<IDSReference> references = new ArrayList<IDSReference>();
+		HashMap<String, Annotation> referenceNames = new HashMap<String, Annotation>();
 
 		for (MethodDeclaration method : type.getMethods()) {
 			for (Object modifier : method.modifiers()) {
@@ -410,27 +415,58 @@ public class AnnotationProcessor extends ASTRequestor {
 				Annotation methodAnnotation = (Annotation) modifier;
 				IAnnotationBinding methodAnnotationBinding = methodAnnotation.resolveAnnotationBinding();
 				String annotationName = methodAnnotationBinding.getAnnotationType().getQualifiedName();
+
 				if (ACTIVATE_ANNOTATION.equals(annotationName)) {
-					activate = method.getName().getIdentifier();
-					validateLifeCycleMethod(methodAnnotation, "activate", method.resolveBinding(), problems); //$NON-NLS-1$
-					break;
+					if (activate == null) {
+						activate = method.getName().getIdentifier();
+						activateAnnotation = methodAnnotation;
+						validateLifeCycleMethod(methodAnnotation, "activate", method.resolveBinding(), problems); //$NON-NLS-1$
+					} else if (!errorLevel.isNone()) {
+						reportProblem(methodAnnotation, null, problems, Messages.AnnotationProcessor_duplicateActivateMethod, method.getName().getIdentifier());
+						if (activateAnnotation != null) {
+							reportProblem(activateAnnotation, null, problems, Messages.AnnotationProcessor_duplicateActivateMethod, activate);
+							activateAnnotation = null;
+						}
+					}
+
+					continue;
 				}
 
 				if (DEACTIVATE_ANNOTATION.equals(annotationName)) {
-					deactivate = method.getName().getIdentifier();
-					validateLifeCycleMethod(methodAnnotation, "deactivate", method.resolveBinding(), problems); //$NON-NLS-1$
-					break;
+					if (deactivate == null) {
+						deactivate = method.getName().getIdentifier();
+						deactivateAnnotation = methodAnnotation;
+						validateLifeCycleMethod(methodAnnotation, "deactivate", method.resolveBinding(), problems); //$NON-NLS-1$
+					} else if (!errorLevel.isNone()) {
+						reportProblem(methodAnnotation, null, problems, Messages.AnnotationProcessor_duplicateDeactivateMethod, method.getName().getIdentifier());
+						if (deactivateAnnotation != null) {
+							reportProblem(deactivateAnnotation, null, problems, Messages.AnnotationProcessor_duplicateDeactivateMethod, deactivate);
+							deactivateAnnotation = null;
+						}
+					}
+
+					continue;
 				}
 
 				if (MODIFIED_ANNOTATION.equals(annotationName)) {
-					modified = method.getName().getIdentifier();
-					validateLifeCycleMethod(methodAnnotation, "modified", method.resolveBinding(), problems); //$NON-NLS-1$
-					break;
+					if (modified == null) {
+						modified = method.getName().getIdentifier();
+						modifiedAnnotation = methodAnnotation;
+						validateLifeCycleMethod(methodAnnotation, "modified", method.resolveBinding(), problems); //$NON-NLS-1$
+					} else if (!errorLevel.isNone()) {
+						reportProblem(methodAnnotation, null, problems, Messages.AnnotationProcessor_duplicateModifiedMethod, method.getName().getIdentifier());
+						if (modifiedAnnotation != null) {
+							reportProblem(modifiedAnnotation, null, problems, Messages.AnnotationProcessor_duplicateModifiedMethod, modified);
+							modifiedAnnotation = null;
+						}
+					}
+
+					continue;
 				}
 
 				if (REFERENCE_ANNOTATION.equals(annotationName)) {
-					processReference(method, method.resolveBinding(), methodAnnotation, methodAnnotationBinding, dsFactory, references, problems);
-					break;
+					processReference(method, method.resolveBinding(), methodAnnotation, methodAnnotationBinding, dsFactory, references, referenceNames, problems);
+					continue;
 				}
 			}
 		}
@@ -578,7 +614,7 @@ public class AnnotationProcessor extends ASTRequestor {
 		}
 	}
 
-	private void processReference(MethodDeclaration method, IMethodBinding methodBinding, Annotation annotation, IAnnotationBinding annotationBinding, IDSDocumentFactory factory, Collection<IDSReference> collector, Collection<DSAnnotationProblem> problems) {
+	private void processReference(MethodDeclaration method, IMethodBinding methodBinding, Annotation annotation, IAnnotationBinding annotationBinding, IDSDocumentFactory factory, Collection<IDSReference> collector, Map<String, Annotation> names, Collection<DSAnnotationProblem> problems) {
 		HashMap<String, Object> params = new HashMap<String, Object>();
 		for (IMemberValuePairBinding pair : annotationBinding.getDeclaredMemberValuePairs()) {
 			params.put(pair.getName(), pair.getValue());
@@ -633,6 +669,17 @@ public class AnnotationProcessor extends ASTRequestor {
 			name = methodName.substring("add".length()); //$NON-NLS-1$
 		} else {
 			name = methodName;
+		}
+
+		if (!errorLevel.isNone()) {
+			if (names.containsKey(name)) {
+				reportProblem(annotation, "name", problems, NLS.bind(Messages.AnnotationProcessor_duplicateReferenceName, name), name); //$NON-NLS-1$
+				Annotation duplicate = names.put(name, null);
+				if (duplicate != null)
+					reportProblem(duplicate, "name", problems, NLS.bind(Messages.AnnotationProcessor_duplicateReferenceName, name), name); //$NON-NLS-1$
+			} else {
+				names.put(name, annotation);
+			}
 		}
 
 		String cardinality = null;
