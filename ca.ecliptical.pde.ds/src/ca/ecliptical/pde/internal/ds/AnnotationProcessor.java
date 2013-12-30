@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -156,7 +157,7 @@ public class AnnotationProcessor extends ASTRequestor {
 			invalid = true;
 			Annotation annotation = findComponentAnnotation(type);
 			if (annotation != null)
-				reportProblem(annotation, null, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
+				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
 		}
 
 		// recurse into nested types
@@ -176,13 +177,13 @@ public class AnnotationProcessor extends ASTRequestor {
 			invalid = true;
 			Annotation annotation = findComponentAnnotation(type);
 			if (annotation != null)
-				reportProblem(annotation, null, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
+				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
 		}
 
 		Annotation annotation = findComponentAnnotation(type);
 		if (annotation != null) {
 			if (invalid) {
-				reportProblem(annotation, null, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
+				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
 			} else {
 				IDSModel model = processComponent(type, type.resolveBinding(), annotation, annotation.resolveAnnotationBinding(), problems);
 				Collection<IDSModel> values = models.get(cu);
@@ -219,20 +220,33 @@ public class AnnotationProcessor extends ASTRequestor {
 			validateComponentName(annotation, name, problems);
 		}
 
-		String[] services;
+		Collection<String> services;
 		if ((value = params.get("service")) instanceof Object[]) { //$NON-NLS-1$
 			Object[] elements = (Object[]) value;
-			services = new String[elements.length];
+			services = new LinkedHashSet<String>(elements.length);
+			Map<String, Integer> serviceDuplicates = errorLevel.isNone() ? null : new HashMap<String, Integer>();
 			for (int i = 0; i < elements.length; ++i) {
 				ITypeBinding serviceType = (ITypeBinding) elements[i];
-				services[i] = serviceType.getBinaryName();
+				String serviceName = serviceType.getBinaryName();
+				if (!errorLevel.isNone()) {
+					if (serviceDuplicates.containsKey(serviceName)) {
+						reportProblem(annotation, "service", i, problems, Messages.AnnotationProcessor_duplicateServiceDeclaration, serviceName); //$NON-NLS-1$
+						Integer pos = serviceDuplicates.put(serviceName, null);
+						if (pos != null)
+							reportProblem(annotation, "service", pos.intValue(), problems, Messages.AnnotationProcessor_duplicateServiceDeclaration, serviceName); //$NON-NLS-1$
+					} else {
+						serviceDuplicates.put(serviceName, i);
+					}
+				}
+
+				services.add(serviceName);
 				validateComponentService(annotation, typeBinding, serviceType, i, problems);
 			}
 		} else {
 			ITypeBinding[] serviceTypes = typeBinding.getInterfaces();
-			services = new String[serviceTypes.length];
+			services = new ArrayList<String>(serviceTypes.length);
 			for (int i = 0; i < serviceTypes.length; ++i) {
-				services[i] = serviceTypes[i].getBinaryName();
+				services.add(serviceTypes[i].getBinaryName());
 			}
 		}
 
@@ -325,7 +339,7 @@ public class AnnotationProcessor extends ASTRequestor {
 		component.setImplementation(impl);
 		impl.setClassName(implClass);
 
-		if (services.length > 0) {
+		if (!services.isEmpty()) {
 			IDSService service = dsFactory.createService();
 			component.setService(service);
 			for (String serviceName : services) {
@@ -375,10 +389,10 @@ public class AnnotationProcessor extends ASTRequestor {
 					}
 
 					if (!errorLevel.isNone()) {
-						String expected = property.getPropertyType() == null || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.DSAnnotationCompilationParticipant_stringOrEmpty : property.getPropertyType();
-						String actual = propertyType == null || String.class.getSimpleName().equals(propertyType) ? Messages.DSAnnotationCompilationParticipant_stringOrEmpty : propertyType;
+						String expected = property.getPropertyType() == null || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
+						String actual = propertyType == null || String.class.getSimpleName().equals(propertyType) ? Messages.AnnotationProcessor_stringOrEmpty : propertyType;
 						if (!actual.equals(expected))
-							reportProblem(annotation, "property", i, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_inconsistentComponentPropertyType, actual, expected), actual); //$NON-NLS-1$
+							reportProblem(annotation, "property", i, problems, NLS.bind(Messages.AnnotationProcessor_inconsistentComponentPropertyType, actual, expected), actual); //$NON-NLS-1$
 						else
 							validateComponentProperty(annotation, propertyName, propertyType, propertyValue, i, problems);
 					}
@@ -493,17 +507,17 @@ public class AnnotationProcessor extends ASTRequestor {
 
 	private void validateComponentName(Annotation annotation, String name, Collection<DSAnnotationProblem> problems) {
 		if (!errorLevel.isNone() && !PID_PATTERN.matcher(name).matches())
-			reportProblem(annotation, "name", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentName, name), name); //$NON-NLS-1$
+			reportProblem(annotation, "name", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentName, name), name); //$NON-NLS-1$
 	}
 
 	private void validateComponentService(Annotation annotation, ITypeBinding componentType, ITypeBinding serviceType, int index, Collection<DSAnnotationProblem> problems) {
 		if (!errorLevel.isNone() && !componentType.isAssignmentCompatible(serviceType))
-			reportProblem(annotation, "service", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentService, serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
+			reportProblem(annotation, "service", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentService, serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
 	}
 
 	private void validateComponentFactory(Annotation annotation, String factory, Collection<DSAnnotationProblem> problems) {
 		if (!errorLevel.isNone() && !PID_PATTERN.matcher(factory).matches())
-			reportProblem(annotation, "factory", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentFactoryName, factory), factory); //$NON-NLS-1$
+			reportProblem(annotation, "factory", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentFactoryName, factory), factory); //$NON-NLS-1$
 	}
 
 	private void validateComponentProperty(Annotation annotation, String name, String type, String value, int index, Collection<DSAnnotationProblem> problems) {
@@ -512,10 +526,10 @@ public class AnnotationProcessor extends ASTRequestor {
 
 		if (PROPERTY_TYPES.contains(type)) {
 			if (name == null || name.trim().isEmpty())
-				reportProblem(annotation, "property", index, problems, Messages.DSAnnotationCompilationParticipant_invalidComponentProperty_nameRequired, name); //$NON-NLS-1$
+				reportProblem(annotation, "property", index, problems, Messages.AnnotationProcessor_invalidComponentProperty_nameRequired, name); //$NON-NLS-1$
 
 			if (value == null) {
-				reportProblem(annotation, "property", index, problems, Messages.DSAnnotationCompilationParticipant_invalidComponentProperty_valueRequired, name); //$NON-NLS-1$
+				reportProblem(annotation, "property", index, problems, Messages.AnnotationProcessor_invalidComponentProperty_valueRequired, name); //$NON-NLS-1$
 			} else {
 				try {
 					if (Long.class.getSimpleName().equals(type))
@@ -531,11 +545,11 @@ public class AnnotationProcessor extends ASTRequestor {
 					else if (Short.class.getSimpleName().equals(type))
 						Short.valueOf(value);
 				} catch (NumberFormatException e) {
-					reportProblem(annotation, "property", index, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentPropertyValue, type, value), String.valueOf(value)); //$NON-NLS-1$
+					reportProblem(annotation, "property", index, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentPropertyValue, type, value), String.valueOf(value)); //$NON-NLS-1$
 				}
 			}
 		} else {
-			reportProblem(annotation, "property", index, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentPropertyType, type), String.valueOf(type)); //$NON-NLS-1$
+			reportProblem(annotation, "property", index, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentPropertyType, type), String.valueOf(type)); //$NON-NLS-1$
 		}
 	}
 
@@ -547,18 +561,18 @@ public class AnnotationProcessor extends ASTRequestor {
 			String file = files[i];
 			IFile wsFile = PDEProject.getBundleRelativeFile(project, new Path(file));
 			if (!wsFile.exists())
-				reportProblem(annotation, "properties", i, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentPropertyFile, file), file); //$NON-NLS-1$
+				reportProblem(annotation, "properties", i, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentPropertyFile, file), file); //$NON-NLS-1$
 		}
 	}
 
 	private void validateComponentXMLNS(Annotation annotation, String xmlns, Collection<DSAnnotationProblem> problems) {
 		if (!errorLevel.isNone() && IDSConstants.NAMESPACE.equals(xmlns))
-			reportProblem(annotation, "xmlns", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentDescriptorNamespace, xmlns), xmlns); //$NON-NLS-1$
+			reportProblem(annotation, "xmlns", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentDescriptorNamespace, xmlns), xmlns); //$NON-NLS-1$
 	}
 
 	private void validateComponentConfigPID(Annotation annotation, String configPid, Collection<DSAnnotationProblem> problems) {
 		if (!errorLevel.isNone() && !PID_PATTERN.matcher(configPid).matches())
-			reportProblem(annotation, "configurationPid", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidComponentConfigurationPid, configPid), configPid); //$NON-NLS-1$
+			reportProblem(annotation, "configurationPid", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentConfigurationPid, configPid), configPid); //$NON-NLS-1$
 	}
 
 	private void validateLifeCycleMethod(Annotation annotation, String methodName, IMethodBinding methodBinding, Collection<DSAnnotationProblem> problems) {
@@ -567,7 +581,7 @@ public class AnnotationProcessor extends ASTRequestor {
 
 		String returnTypeName = methodBinding.getReturnType().getName();
 		if (!Void.TYPE.getName().equals(returnTypeName))
-			reportProblem(annotation, methodName, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidLifeCycleMethodReturnType, methodName, returnTypeName), returnTypeName);
+			reportProblem(annotation, methodName, problems, NLS.bind(Messages.AnnotationProcessor_invalidLifeCycleMethodReturnType, methodName, returnTypeName), returnTypeName);
 
 		ITypeBinding[] paramTypeBindings = methodBinding.getParameterTypes();
 
@@ -606,11 +620,11 @@ public class AnnotationProcessor extends ASTRequestor {
 				else
 					hasInt = true;
 			} else {
-				reportProblem(annotation, methodName, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidLifeCycleMethodParameterType, methodName, paramTypeName), paramTypeName);
+				reportProblem(annotation, methodName, problems, NLS.bind(Messages.AnnotationProcessor_invalidLifeCycleMethodParameterType, methodName, paramTypeName), paramTypeName);
 			}
 
 			if (isDuplicate)
-				reportProblem(annotation, methodName, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_duplicateLifeCycleMethodParameterType, methodName, paramTypeName), paramTypeName);
+				reportProblem(annotation, methodName, problems, NLS.bind(Messages.AnnotationProcessor_duplicateLifeCycleMethodParameterType, methodName, paramTypeName), paramTypeName);
 		}
 	}
 
@@ -631,7 +645,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				if (!(ServiceReference.class.getName().equals(argTypes[0].getErasure().getQualifiedName())
 						&& ((typeArgs = argTypes[0].getTypeArguments()).length == 0 || serviceType.isAssignmentCompatible(typeArgs[0])))
 						&& !serviceType.isAssignmentCompatible(argTypes[0]))
-					reportProblem(annotation, "service", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceService, argTypes[0].getName(), serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
+					reportProblem(annotation, "service", problems, NLS.bind(Messages.AnnotationProcessor_invalidReferenceService, argTypes[0].getName(), serviceType.getName()), serviceType.getName()); //$NON-NLS-1$
 			}
 		} else if (argTypes.length > 0) {
 			if (ServiceReference.class.getName().equals(argTypes[0].getErasure().getQualifiedName())) {
@@ -714,7 +728,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				if (!errorLevel.isNone() && serviceType != null) {
 					IMethodBinding unbindMethod = findReferenceMethod(methodBinding.getDeclaringClass(), serviceType, unbind);
 					if (unbindMethod == null)
-						reportProblem(annotation, "unbind", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceUnbind, unbind), unbind); //$NON-NLS-1$
+						reportProblem(annotation, "unbind", problems, NLS.bind(Messages.AnnotationProcessor_invalidReferenceUnbind, unbind), unbind); //$NON-NLS-1$
 				}
 			}
 		} else if (serviceType != null) {
@@ -752,7 +766,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				if (!errorLevel.isNone() && serviceType != null) {
 					IMethodBinding updatedMethod = findReferenceMethod(methodBinding.getDeclaringClass(), serviceType, updated);
 					if (updatedMethod == null)
-						reportProblem(annotation, "updated", problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidReferenceUpdated, updated), updated); //$NON-NLS-1$
+						reportProblem(annotation, "updated", problems, NLS.bind(Messages.AnnotationProcessor_invalidReferenceUpdated, updated), updated); //$NON-NLS-1$
 				}
 			}
 		} else if (serviceType != null) {
@@ -840,7 +854,7 @@ public class AnnotationProcessor extends ASTRequestor {
 
 		String returnTypeName = methodBinding.getReturnType().getName();
 		if (!Void.TYPE.getName().equals(returnTypeName))
-			reportProblem(annotation, null, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidBindMethodReturnType, returnTypeName), returnTypeName);
+			reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidBindMethodReturnType, returnTypeName), returnTypeName);
 
 		ITypeBinding[] paramTypeBindings = methodBinding.getParameterTypes();
 		if (!(paramTypeBindings.length == 1 && (ServiceReference.class.getName().equals(paramTypeBindings[0].getErasure().getQualifiedName()) || serviceType == null || serviceType.isAssignmentCompatible(paramTypeBindings[0])))
@@ -857,7 +871,7 @@ public class AnnotationProcessor extends ASTRequestor {
 			}
 
 			buf.append(')');
-			reportProblem(annotation, null, problems, NLS.bind(Messages.DSAnnotationCompilationParticipant_invalidBindMethodParameters, buf, serviceType == null ? Messages.DSAnnotationCompilationParticipant_unknownServiceTypeLabel : serviceType.getName()), params);
+			reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidBindMethodParameters, buf, serviceType == null ? Messages.AnnotationProcessor_unknownServiceTypeLabel : serviceType.getName()), params);
 		}
 	}
 

@@ -20,55 +20,57 @@ public class Messages extends NLS {
 
 	public static String AnnotationProcessor_duplicateDeactivateMethod;
 
+	public static String AnnotationProcessor_duplicateLifeCycleMethodParameterType;
+
 	public static String AnnotationProcessor_duplicateModifiedMethod;
 
 	public static String AnnotationProcessor_duplicateReferenceName;
 
+	public static String AnnotationProcessor_duplicateServiceDeclaration;
+
+	public static String AnnotationProcessor_inconsistentComponentPropertyType;
+
+	public static String AnnotationProcessor_invalidBindMethodParameters;
+
+	public static String AnnotationProcessor_invalidBindMethodReturnType;
+
+	public static String AnnotationProcessor_invalidComponentConfigurationPid;
+
+	public static String AnnotationProcessor_invalidComponentDescriptorNamespace;
+
+	public static String AnnotationProcessor_invalidComponentFactoryName;
+
+	public static String AnnotationProcessor_invalidComponentImplementationClass;
+
+	public static String AnnotationProcessor_invalidComponentName;
+
+	public static String AnnotationProcessor_invalidComponentProperty_nameRequired;
+
+	public static String AnnotationProcessor_invalidComponentProperty_valueRequired;
+
+	public static String AnnotationProcessor_invalidComponentPropertyFile;
+
+	public static String AnnotationProcessor_invalidComponentPropertyType;
+
+	public static String AnnotationProcessor_invalidComponentPropertyValue;
+
+	public static String AnnotationProcessor_invalidComponentService;
+
+	public static String AnnotationProcessor_invalidLifeCycleMethodParameterType;
+
+	public static String AnnotationProcessor_invalidLifeCycleMethodReturnType;
+
+	public static String AnnotationProcessor_invalidReferenceService;
+
 	public static String AnnotationProcessor_invalidReferenceServiceUnknown;
 
-	public static String DSAnnotationCompilationParticipant_duplicateLifeCycleMethodParameterType;
+	public static String AnnotationProcessor_invalidReferenceUnbind;
 
-	public static String DSAnnotationCompilationParticipant_inconsistentComponentPropertyType;
+	public static String AnnotationProcessor_invalidReferenceUpdated;
 
-	public static String DSAnnotationCompilationParticipant_invalidBindMethodParameters;
+	public static String AnnotationProcessor_stringOrEmpty;
 
-	public static String DSAnnotationCompilationParticipant_invalidBindMethodReturnType;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentConfigurationPid;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentDescriptorNamespace;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentFactoryName;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentImplementationClass;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentName;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentProperty_nameRequired;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentProperty_valueRequired;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentPropertyFile;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentPropertyType;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentPropertyValue;
-
-	public static String DSAnnotationCompilationParticipant_invalidComponentService;
-
-	public static String DSAnnotationCompilationParticipant_invalidLifeCycleMethodParameterType;
-
-	public static String DSAnnotationCompilationParticipant_invalidLifeCycleMethodReturnType;
-
-	public static String DSAnnotationCompilationParticipant_invalidReferenceService;
-
-	public static String DSAnnotationCompilationParticipant_invalidReferenceUnbind;
-
-	public static String DSAnnotationCompilationParticipant_invalidReferenceUpdated;
-
-	public static String DSAnnotationCompilationParticipant_stringOrEmpty;
-
-	public static String DSAnnotationCompilationParticipant_unknownServiceTypeLabel;
+	public static String AnnotationProcessor_unknownServiceTypeLabel;
 
 	public static String DSAnnotationPreferenceListener_jobName;
 
