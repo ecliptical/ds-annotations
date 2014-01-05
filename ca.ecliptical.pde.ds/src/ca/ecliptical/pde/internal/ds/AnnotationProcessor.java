@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Ecliptical Software Inc. and others.
+ * Copyright (c) 2012, 2014 Ecliptical Software Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Ecliptical Software Inc. - initial API and implementation
  *******************************************************************************/
@@ -30,10 +30,15 @@ import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.compiler.BuildContext;
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
 import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTRequestor;
+import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.AnnotationTypeDeclaration;
 import org.eclipse.jdt.core.dom.ArrayInitializer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.EnumDeclaration;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.IAnnotationBinding;
 import org.eclipse.jdt.core.dom.IMemberValuePairBinding;
@@ -77,6 +82,44 @@ import org.osgi.service.component.annotations.ReferencePolicyOption;
 @SuppressWarnings("restriction")
 public class AnnotationProcessor extends ASTRequestor {
 
+	private final Map<ICompilationUnit, Collection<IDSModel>> models;
+
+	private final Map<ICompilationUnit, BuildContext> fileMap;
+
+	private final ValidationErrorLevel errorLevel;
+
+	public AnnotationProcessor(Map<ICompilationUnit, Collection<IDSModel>> models, Map<ICompilationUnit, BuildContext> fileMap, ValidationErrorLevel errorLevel) {
+		this.models = models;
+		this.fileMap = fileMap;
+		this.errorLevel = errorLevel;
+	}
+
+	@Override
+	public void acceptAST(ICompilationUnit source, CompilationUnit ast) {
+		HashSet<IDSModel> modelSet = new HashSet<IDSModel>();
+		models.put(source, modelSet);
+		HashSet<DSAnnotationProblem> problems = new HashSet<DSAnnotationProblem>();
+
+		ast.accept(new AnnotationVisitor(modelSet, errorLevel, problems));
+
+		if (!problems.isEmpty()) {
+			char[] filename = source.getResource().getFullPath().toString().toCharArray();
+			for (DSAnnotationProblem problem : problems) {
+				problem.setOriginatingFileName(filename);
+				if (problem.getSourceStart() >= 0)
+					problem.setSourceLineNumber(ast.getLineNumber(problem.getSourceStart()));
+			}
+
+			BuildContext buildContext = fileMap.get(source);
+			if (buildContext != null)
+				buildContext.recordNewProblems(problems.toArray(new CategorizedProblem[problems.size()]));
+		}
+	}
+}
+
+@SuppressWarnings("restriction")
+class AnnotationVisitor extends ASTVisitor {
+
 	private static final String COMPONENT_ANNOTATION = DSAnnotationCompilationParticipant.COMPONENT_ANNOTATION;
 
 	private static final String ACTIVATE_ANNOTATION = Activate.class.getName();
@@ -110,99 +153,126 @@ public class AnnotationProcessor extends ASTRequestor {
 		}
 	};
 
-	private final Map<ICompilationUnit, Collection<IDSModel>> models;
+	private static final Debug debug = Debug.getDebug("ds-annotation-builder/processor"); //$NON-NLS-1$
 
-	private final Map<ICompilationUnit, BuildContext> fileMap;
+	private final Collection<IDSModel> models;
 
 	private final ValidationErrorLevel errorLevel;
 
-	public AnnotationProcessor(Map<ICompilationUnit, Collection<IDSModel>> models, Map<ICompilationUnit, BuildContext> fileMap, ValidationErrorLevel errorLevel) {
+	private final Set<DSAnnotationProblem> problems;
+
+	public AnnotationVisitor(Collection<IDSModel> models, ValidationErrorLevel errorLevel, Set<DSAnnotationProblem> problems) {
 		this.models = models;
-		this.fileMap = fileMap;
 		this.errorLevel = errorLevel;
+		this.problems = problems;
 	}
 
 	@Override
-	public void acceptAST(ICompilationUnit source, CompilationUnit ast) {
-		models.put(source, new HashSet<IDSModel>());
-		BuildContext buildContext = fileMap.get(source);
-		HashSet<DSAnnotationProblem> problems = new HashSet<DSAnnotationProblem>();
-
-		for (Object element : ast.types()) {
-			if (!(element instanceof TypeDeclaration))
-				continue;
-
-			visit(source, (TypeDeclaration) element, problems, false);
-		}
-
-		if (!problems.isEmpty()) {
-			char[] filename = source.getResource().getFullPath().toString().toCharArray();
-			for (DSAnnotationProblem problem : problems) {
-				problem.setOriginatingFileName(filename);
-				if (problem.getSourceStart() >= 0)
-					problem.setSourceLineNumber(ast.getLineNumber(problem.getSourceStart()));
-			}
-
-			buildContext.recordNewProblems(problems.toArray(new CategorizedProblem[problems.size()]));
-		}
-	}
-
-	private void visit(ICompilationUnit cu, TypeDeclaration type, Collection<DSAnnotationProblem> problems, boolean invalid) {
-		if (type.isInterface()
-				|| type.isLocalTypeDeclaration()
-				|| !Modifier.isPublic(type.getModifiers())) {
+	public boolean visit(TypeDeclaration type) {
+		if (!Modifier.isPublic(type.getModifiers())) {
+			// non-public types cannot be (or have nested) components
 			if (errorLevel.isNone())
-				return;	// interfaces, local types and non-public types cannot be (or have nested) components
+				return false;
 
-			invalid = true;
 			Annotation annotation = findComponentAnnotation(type);
 			if (annotation != null)
 				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
-		}
 
-		// recurse into nested types
-		for (Object element : type.getTypes()) {
-			if (!(element instanceof TypeDeclaration))
-				continue;
-
-			visit(cu, (TypeDeclaration) element, problems, invalid);
-		}
-
-		if (Modifier.isAbstract(type.getModifiers())
-				|| (!type.isPackageMemberTypeDeclaration()
-						&& !Modifier.isStatic(type.getModifiers()))) {
-			if (errorLevel.isNone())
-				return;	// abstract types and non-static nested types cannot be components
-
-			invalid = true;
-			Annotation annotation = findComponentAnnotation(type);
-			if (annotation != null)
-				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
+			return true;
 		}
 
 		Annotation annotation = findComponentAnnotation(type);
 		if (annotation != null) {
-			if (invalid) {
+			if (type.isInterface()
+					|| Modifier.isAbstract(type.getModifiers())
+					|| (!type.isPackageMemberTypeDeclaration() && !isNestedPublicStatic(type))
+					|| !hasDefaultConstructor(type)) {
+				// interfaces, abstract types, non-static/non-public nested types, or types with no default constructor cannot be components
 				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
 			} else {
-				IDSModel model = processComponent(type, type.resolveBinding(), annotation, annotation.resolveAnnotationBinding(), problems);
-				Collection<IDSModel> values = models.get(cu);
-				values.add(model);
+				ITypeBinding typeBinding = type.resolveBinding();
+				if (typeBinding == null) {
+					if (debug.isDebugging())
+						debug.trace(String.format("Unable to resolve binding for type: %s", type)); //$NON-NLS-1$
+				} else {
+					IAnnotationBinding annotationBinding = annotation.resolveAnnotationBinding();
+					if (annotationBinding == null) {
+						if (debug.isDebugging())
+							debug.trace(String.format("Unable to resolve binding for annotation: %s", annotation)); //$NON-NLS-1$
+					} else {
+						IDSModel model = processComponent(type, typeBinding, annotation, annotationBinding, problems);
+						models.add(model);
+					}
+				}
 			}
 		}
+
+		return true;
 	}
 
-	private Annotation findComponentAnnotation(TypeDeclaration type) {
+	@Override
+	public boolean visit(EnumDeclaration node) {
+		return visitInvalidElementType(node);
+	}
+
+	@Override
+	public boolean visit(AnnotationTypeDeclaration node) {
+		return visitInvalidElementType(node);
+	}
+
+	private boolean visitInvalidElementType(AbstractTypeDeclaration type) {
+		Annotation annotation = findComponentAnnotation(type);
+		if (annotation != null)
+			reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentImplementationClass, type.getName().getIdentifier()), type.getName().getIdentifier());
+
+		return errorLevel != ValidationErrorLevel.none;
+	}
+
+	private Annotation findComponentAnnotation(AbstractTypeDeclaration type) {
 		for (Object item : type.modifiers()) {
 			if (!(item instanceof Annotation))
 				continue;
 
 			Annotation annotation = (Annotation) item;
-			if (COMPONENT_ANNOTATION.equals(annotation.resolveAnnotationBinding().getAnnotationType().getQualifiedName()))
+			IAnnotationBinding annotationBinding = annotation.resolveAnnotationBinding();
+			if (annotationBinding == null) {
+				if (debug.isDebugging())
+					debug.trace(String.format("Unable to resolve binding for annotation: %s", annotation)); //$NON-NLS-1$
+
+				continue;
+			}
+
+			if (COMPONENT_ANNOTATION.equals(annotationBinding.getAnnotationType().getQualifiedName()))
 				return annotation;
 		}
 
 		return null;
+	}
+
+	private boolean isNestedPublicStatic(TypeDeclaration type) {
+		if (Modifier.isStatic(type.getModifiers())) {
+			ASTNode parent = type.getParent();
+			if (parent != null && parent.getNodeType() == ASTNode.TYPE_DECLARATION) {
+				TypeDeclaration parentType = (TypeDeclaration) parent;
+				if (Modifier.isPublic(parentType.getModifiers()))
+					return parentType.isPackageMemberTypeDeclaration() || isNestedPublicStatic(parentType);
+			}
+		}
+
+		return false;
+	}
+
+	private boolean hasDefaultConstructor(TypeDeclaration type) {
+		boolean hasConstructor = false;
+		for (MethodDeclaration method : type.getMethods()) {
+			if (method.isConstructor()) {
+				hasConstructor = true;
+				if (Modifier.isPublic(method.getModifiers()) && method.parameters().isEmpty())
+					return true;
+			}
+		}
+
+		return !hasConstructor;
 	}
 
 	private IDSModel processComponent(TypeDeclaration type, ITypeBinding typeBinding, Annotation annotation, IAnnotationBinding annotationBinding, Collection<DSAnnotationProblem> problems) {
@@ -274,8 +344,13 @@ public class AnnotationProcessor extends ASTRequestor {
 		String[] properties;
 		if ((value = params.get("property")) instanceof Object[]) { //$NON-NLS-1$
 			Object[] elements = (Object[]) value;
-			properties = new String[elements.length];
-			System.arraycopy(elements, 0, properties, 0, elements.length);
+			ArrayList<String> list = new ArrayList<String>(elements.length);
+			for (int i = 0; i < elements.length; ++i) {
+				if (elements[i] instanceof String)
+					list.add((String) elements[i]);
+			}
+
+			properties = list.toArray(new String[list.size()]);
 		} else {
 			properties = new String[0];
 		}
@@ -283,8 +358,13 @@ public class AnnotationProcessor extends ASTRequestor {
 		String[] propertyFiles;
 		if ((value = params.get("properties")) instanceof Object[]) { //$NON-NLS-1$
 			Object[] elements = (Object[]) value;
-			propertyFiles = new String[elements.length];
-			System.arraycopy(elements, 0, propertyFiles, 0, elements.length);
+			ArrayList<String> list = new ArrayList<String>(elements.length);
+			for (int i = 0; i < elements.length; ++i) {
+				if (elements[i] instanceof String)
+					list.add((String) elements[i]);
+			}
+
+			propertyFiles = list.toArray(new String[list.size()]);
 			validateComponentPropertyFiles(annotation, ((IType) typeBinding.getJavaElement()).getJavaProject().getProject(), propertyFiles, problems);
 		} else {
 			propertyFiles = new String[0];
@@ -428,13 +508,20 @@ public class AnnotationProcessor extends ASTRequestor {
 
 				Annotation methodAnnotation = (Annotation) modifier;
 				IAnnotationBinding methodAnnotationBinding = methodAnnotation.resolveAnnotationBinding();
+				if (methodAnnotationBinding == null) {
+					if (debug.isDebugging())
+						debug.trace(String.format("Unable to resolve binding for annotation: %s", methodAnnotation)); //$NON-NLS-1$
+
+					continue;
+				}
+
 				String annotationName = methodAnnotationBinding.getAnnotationType().getQualifiedName();
 
 				if (ACTIVATE_ANNOTATION.equals(annotationName)) {
 					if (activate == null) {
 						activate = method.getName().getIdentifier();
 						activateAnnotation = methodAnnotation;
-						validateLifeCycleMethod(methodAnnotation, "activate", method.resolveBinding(), problems); //$NON-NLS-1$
+						validateLifeCycleMethod(methodAnnotation, "activate", method, problems); //$NON-NLS-1$
 					} else if (!errorLevel.isNone()) {
 						reportProblem(methodAnnotation, null, problems, Messages.AnnotationProcessor_duplicateActivateMethod, method.getName().getIdentifier());
 						if (activateAnnotation != null) {
@@ -450,7 +537,7 @@ public class AnnotationProcessor extends ASTRequestor {
 					if (deactivate == null) {
 						deactivate = method.getName().getIdentifier();
 						deactivateAnnotation = methodAnnotation;
-						validateLifeCycleMethod(methodAnnotation, "deactivate", method.resolveBinding(), problems); //$NON-NLS-1$
+						validateLifeCycleMethod(methodAnnotation, "deactivate", method, problems); //$NON-NLS-1$
 					} else if (!errorLevel.isNone()) {
 						reportProblem(methodAnnotation, null, problems, Messages.AnnotationProcessor_duplicateDeactivateMethod, method.getName().getIdentifier());
 						if (deactivateAnnotation != null) {
@@ -466,7 +553,7 @@ public class AnnotationProcessor extends ASTRequestor {
 					if (modified == null) {
 						modified = method.getName().getIdentifier();
 						modifiedAnnotation = methodAnnotation;
-						validateLifeCycleMethod(methodAnnotation, "modified", method.resolveBinding(), problems); //$NON-NLS-1$
+						validateLifeCycleMethod(methodAnnotation, "modified", method, problems); //$NON-NLS-1$
 					} else if (!errorLevel.isNone()) {
 						reportProblem(methodAnnotation, null, problems, Messages.AnnotationProcessor_duplicateModifiedMethod, method.getName().getIdentifier());
 						if (modifiedAnnotation != null) {
@@ -479,7 +566,14 @@ public class AnnotationProcessor extends ASTRequestor {
 				}
 
 				if (REFERENCE_ANNOTATION.equals(annotationName)) {
-					processReference(method, method.resolveBinding(), methodAnnotation, methodAnnotationBinding, dsFactory, references, referenceNames, problems);
+					IMethodBinding methodBinding = method.resolveBinding();
+					if (methodBinding == null) {
+						if (debug.isDebugging())
+							debug.trace(String.format("Unable to resolve binding for method: %s", method)); //$NON-NLS-1$
+					} else {
+						processReference(method, methodBinding, methodAnnotation, methodAnnotationBinding, dsFactory, references, referenceNames, problems);
+					}
+
 					continue;
 				}
 			}
@@ -575,9 +669,17 @@ public class AnnotationProcessor extends ASTRequestor {
 			reportProblem(annotation, "configurationPid", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentConfigurationPid, configPid), configPid); //$NON-NLS-1$
 	}
 
-	private void validateLifeCycleMethod(Annotation annotation, String methodName, IMethodBinding methodBinding, Collection<DSAnnotationProblem> problems) {
+	private void validateLifeCycleMethod(Annotation annotation, String methodName, MethodDeclaration method, Collection<DSAnnotationProblem> problems) {
 		if (errorLevel.isNone())
 			return;
+
+		IMethodBinding methodBinding = method.resolveBinding();
+		if (methodBinding == null) {
+			if (debug.isDebugging())
+				debug.trace(String.format("Unable to resolve binding for method: %s", method)); //$NON-NLS-1$
+
+			return;
+		}
 
 		String returnTypeName = methodBinding.getReturnType().getName();
 		if (!Void.TYPE.getName().equals(returnTypeName))

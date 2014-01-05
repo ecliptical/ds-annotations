@@ -1,2 +1,3 @@
 ca.ecliptical.pde.ds/debug=false
 ca.ecliptical.pde.ds/ds-annotation-builder=false
+ca.ecliptical.pde.ds/ds-annotation-builder/processor=false

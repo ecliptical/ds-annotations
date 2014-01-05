@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Ecliptical Software Inc. and others.
+ * Copyright (c) 2012, 2014 Ecliptical Software Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Ecliptical Software Inc. - initial API and implementation
  *******************************************************************************/
@@ -493,15 +493,16 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 	}
 
 	private void processAnnotations(IJavaProject javaProject, Map<ICompilationUnit, BuildContext> fileMap) {
-		ASTParser parser = ASTParser.newParser(AST.JLS4);
+		ASTParser parser = ASTParser.newParser(AST.JLS8);
 		parser.setResolveBindings(true);
 		parser.setBindingsRecovery(true);
 		parser.setProject(javaProject);
 		parser.setKind(ASTParser.K_COMPILATION_UNIT);
-		parser.setIgnoreMethodBodies(true);
 
 		ProjectContext projectContext = processingContext.get(javaProject);
 		ProjectState state = projectContext.getState();
+
+		parser.setIgnoreMethodBodies(state.getErrorLevel() == ValidationErrorLevel.none);
 
 		ICompilationUnit[] cuArr = fileMap.keySet().toArray(new ICompilationUnit[fileMap.size()]);
 		Map<ICompilationUnit, Collection<IDSModel>> models = new HashMap<ICompilationUnit, Collection<IDSModel>>();
