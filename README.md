@@ -21,7 +21,7 @@ Make sure package org.osgi.service.component.annotations is in your PDE Plug-in 
 Note that the descriptor files generated from source annotations are overwritten on every source change; however, manually created descriptor files (i.e., those that are not generated from annotated classes) are left unchanged. Thus it is possible to combine automated generation with manually created and maintained descriptors.
 
 -----
-<a id="classpath">*</a>: There are several ways to make DS annotations available to your code. E.g.,
+<a name="classpath" id="classpath">*</a> There are several ways to make DS annotations available to your code. E.g.,
 
 *A. Additional bundle*: Add bundle _ca.ecliptical.pde.ds.lib_ under _Automated Management of Dependencies_ in your Plug-in Manifest Editor's _Dependencies_ tab.
 
