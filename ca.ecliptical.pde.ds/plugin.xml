@@ -62,5 +62,20 @@
             value="true">
       </persistent>
    </extension>
+   <extension
+         point="org.eclipse.core.contenttype.contentTypes">
+      <content-type
+            base-type="org.eclipse.pde.ds.core.content-type"
+            id="ca.ecliptical.pde.ds.content-type-v12"
+            name="%content-type-v12.name">
+         <describer
+               class="org.eclipse.core.runtime.content.XMLRootElementContentDescriber2">
+            <parameter
+                  name="element"
+                  value="{http://www.osgi.org/xmlns/scr/v1.2.0}component">
+            </parameter>
+         </describer>
+      </content-type>
+   </extension>
 
 </plugin>

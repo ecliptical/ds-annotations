@@ -132,6 +132,10 @@ class AnnotationVisitor extends ASTVisitor {
 
 	private static final Pattern PID_PATTERN = Pattern.compile("[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*"); //$NON-NLS-1$
 
+	private static final String NAMESPACE_1_1 = IDSConstants.NAMESPACE;
+
+	private static final String NAMESPACE_1_2 = "http://www.osgi.org/xmlns/scr/v1.2.0"; //$NON-NLS-1$
+
 	private static final Set<String> PROPERTY_TYPES = Collections.unmodifiableSet(
 			new HashSet<String>(
 					Arrays.asList(
@@ -281,6 +285,8 @@ class AnnotationVisitor extends ASTVisitor {
 			params.put(pair.getName(), pair.getValue());
 		}
 
+		boolean requiresV12 = false;
+
 		String implClass = typeBinding.getBinaryName();
 
 		String name = implClass;
@@ -370,12 +376,6 @@ class AnnotationVisitor extends ASTVisitor {
 			propertyFiles = new String[0];
 		}
 
-		String xmlns = null;
-		if ((value = params.get("xmlns")) instanceof String) { //$NON-NLS-1$
-			xmlns = (String) value;
-			validateComponentXMLNS(annotation, xmlns, problems);
-		}
-
 		String configPolicy = null;
 		if ((value = params.get("configurationPolicy")) instanceof IVariableBinding) { //$NON-NLS-1$
 			IVariableBinding configPolicyBinding = (IVariableBinding) value;
@@ -388,13 +388,11 @@ class AnnotationVisitor extends ASTVisitor {
 		if ((value = params.get("configurationPid")) instanceof String) { //$NON-NLS-1$
 			configPid = (String) value;
 			validateComponentConfigPID(annotation, configPid, problems);
+			requiresV12 = true;
 		}
 
 		DSModel model = new DSModel(new Document(), false);
 		IDSComponent component = model.getDSComponent();
-
-		if (xmlns != null)
-			component.setNamespace(xmlns);
 
 		if (name != null)
 			component.setAttributeName(name);
@@ -571,7 +569,7 @@ class AnnotationVisitor extends ASTVisitor {
 						if (debug.isDebugging())
 							debug.trace(String.format("Unable to resolve binding for method: %s", method)); //$NON-NLS-1$
 					} else {
-						processReference(method, methodBinding, methodAnnotation, methodAnnotationBinding, dsFactory, references, referenceNames, problems);
+						requiresV12 |= processReference(method, methodBinding, methodAnnotation, methodAnnotationBinding, dsFactory, references, referenceNames, problems);
 					}
 
 					continue;
@@ -595,6 +593,17 @@ class AnnotationVisitor extends ASTVisitor {
 				component.addReference(reference);
 			}
 		}
+
+		String xmlns = null;
+		if ((value = params.get("xmlns")) instanceof String) { //$NON-NLS-1$
+			xmlns = (String) value;
+			validateComponentXMLNS(annotation, xmlns, requiresV12, problems);
+		} else if (requiresV12) {
+			xmlns = NAMESPACE_1_2;
+		}
+
+		if (xmlns != null)
+			component.setNamespace(xmlns);
 
 		return model;
 	}
@@ -659,8 +668,8 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 	}
 
-	private void validateComponentXMLNS(Annotation annotation, String xmlns, Collection<DSAnnotationProblem> problems) {
-		if (!errorLevel.isNone() && IDSConstants.NAMESPACE.equals(xmlns))
+	private void validateComponentXMLNS(Annotation annotation, String xmlns, boolean requiresV12, Collection<DSAnnotationProblem> problems) {
+		if (!errorLevel.isNone() && (requiresV12 || !NAMESPACE_1_1.equals(xmlns)) && !NAMESPACE_1_2.equals(xmlns))
 			reportProblem(annotation, "xmlns", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentDescriptorNamespace, xmlns), xmlns); //$NON-NLS-1$
 	}
 
@@ -730,11 +739,13 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 	}
 
-	private void processReference(MethodDeclaration method, IMethodBinding methodBinding, Annotation annotation, IAnnotationBinding annotationBinding, IDSDocumentFactory factory, Collection<IDSReference> collector, Map<String, Annotation> names, Collection<DSAnnotationProblem> problems) {
+	private boolean processReference(MethodDeclaration method, IMethodBinding methodBinding, Annotation annotation, IAnnotationBinding annotationBinding, IDSDocumentFactory factory, Collection<IDSReference> collector, Map<String, Annotation> names, Collection<DSAnnotationProblem> problems) {
 		HashMap<String, Object> params = new HashMap<String, Object>();
 		for (IMemberValuePairBinding pair : annotationBinding.getDeclaredMemberValuePairs()) {
 			params.put(pair.getName(), pair.getValue());
 		}
+
+		boolean requiresV12 = false;
 
 		ITypeBinding[] argTypes = methodBinding.getParameterTypes();
 
@@ -854,8 +865,10 @@ class AnnotationVisitor extends ASTVisitor {
 		if ((value = params.get("policyOption")) instanceof IVariableBinding) { //$NON-NLS-1$
 			IVariableBinding policyOptionBinding = (IVariableBinding) value;
 			ReferencePolicyOption policyOptionLiteral = ReferencePolicyOption.valueOf(policyOptionBinding.getName());
-			if (policyOptionLiteral != null)
+			if (policyOptionLiteral != null) {
 				policyOption = policyOptionLiteral.toString();
+				requiresV12 = true;
+			}
 		}
 
 		String updated;
@@ -871,6 +884,8 @@ class AnnotationVisitor extends ASTVisitor {
 						reportProblem(annotation, "updated", problems, NLS.bind(Messages.AnnotationProcessor_invalidReferenceUpdated, updated), updated); //$NON-NLS-1$
 				}
 			}
+
+			requiresV12 = true;
 		} else if (serviceType != null) {
 			String updatedCandidate;
 			if (methodName.startsWith("bind")) { //$NON-NLS-1$
@@ -920,6 +935,8 @@ class AnnotationVisitor extends ASTVisitor {
 
 		if (updated != null)
 			reference.setXMLAttribute("updated", updated); //$NON-NLS-1$
+
+		return requiresV12;
 	}
 
 	private ITypeBinding getObjectType(AST ast, ITypeBinding primitive) {
