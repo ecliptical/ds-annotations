@@ -493,7 +493,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 	}
 
 	private void processAnnotations(IJavaProject javaProject, Map<ICompilationUnit, BuildContext> fileMap) {
-		ASTParser parser = ASTParser.newParser(AST.JLS8);
+		ASTParser parser = ASTParser.newParser(AST.JLS4);
 		parser.setResolveBindings(true);
 		parser.setBindingsRecovery(true);
 		parser.setProject(javaProject);

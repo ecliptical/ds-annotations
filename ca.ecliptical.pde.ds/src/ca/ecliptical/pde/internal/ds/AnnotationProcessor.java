@@ -467,7 +467,7 @@ class AnnotationVisitor extends ASTVisitor {
 					}
 
 					if (!errorLevel.isNone()) {
-						String expected = property.getPropertyType() == null || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
+						String expected = property.getPropertyType() == null || property.getPropertyType().isEmpty() || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
 						String actual = propertyType == null || String.class.getSimpleName().equals(propertyType) ? Messages.AnnotationProcessor_stringOrEmpty : propertyType;
 						if (!actual.equals(expected))
 							reportProblem(annotation, "property", i, problems, NLS.bind(Messages.AnnotationProcessor_inconsistentComponentPropertyType, actual, expected), actual); //$NON-NLS-1$
