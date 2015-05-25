@@ -1011,8 +1011,6 @@ class AnnotationVisitor extends ASTVisitor {
 	}
 
 	private IMethodBinding findReferenceMethod(ITypeBinding componentClass, ITypeBinding serviceType, String name) {
-		ITypeBinding testedClass = componentClass;
-
 		IMethodBinding candidate = null;
 		int priority = 0;
 		// priority:
@@ -1020,46 +1018,39 @@ class AnnotationVisitor extends ASTVisitor {
 		// 1: <exact-type>, Map
 		// 2: <assignment-compatible-type>
 		// 3: <exact-type>
-		do {
-			for (IMethodBinding declaredMethod : testedClass.getDeclaredMethods()) {
-				if (name.equals(declaredMethod.getName())
-						&& Void.TYPE.getName().equals(declaredMethod.getReturnType().getName())
-						&& (testedClass.isEqualTo(componentClass)
-								|| Modifier.isPublic(declaredMethod.getModifiers())
-								|| Modifier.isProtected(declaredMethod.getModifiers())
-								|| (!Modifier.isPrivate(declaredMethod.getModifiers())
-										&& testedClass.getPackage().isEqualTo(componentClass.getPackage())))) {
-					ITypeBinding[] paramTypes = declaredMethod.getParameterTypes();
-					if (paramTypes.length == 1) {
-						if (ServiceReference.class.getName().equals(paramTypes[0].getErasure().getQualifiedName()))
-							// we have the winner
-							return declaredMethod;
+		for (IMethodBinding declaredMethod : componentClass.getDeclaredMethods()) {
+			if (name.equals(declaredMethod.getName())
+					&& Void.TYPE.getName().equals(declaredMethod.getReturnType().getName())) {
+				ITypeBinding[] paramTypes = declaredMethod.getParameterTypes();
+				if (paramTypes.length == 1) {
+					if (ServiceReference.class.getName().equals(paramTypes[0].getErasure().getQualifiedName()))
+						// we have the winner
+						return declaredMethod;
 
-						if (priority < 3 && serviceType.isEqualTo(paramTypes[0]))
-							priority = 3;
-						else if (priority < 2 && serviceType.isAssignmentCompatible(paramTypes[0]))
-							priority = 2;
-						else
-							continue;
+					if (priority < 3 && serviceType.isEqualTo(paramTypes[0]))
+						priority = 3;
+					else if (priority < 2 && serviceType.isAssignmentCompatible(paramTypes[0]))
+						priority = 2;
+					else
+						continue;
 
-						// we have a (better) candidate
-						candidate = declaredMethod;
-					} else if (paramTypes.length == 2) {
-						if (priority < 1
-								&& serviceType.isEqualTo(paramTypes[0])
-								&& Map.class.getName().equals(paramTypes[1].getErasure().getQualifiedName()))
-							priority = 1;
-						else if (candidate != null
-								|| !serviceType.isAssignmentCompatible(paramTypes[0])
-								|| !Map.class.getName().equals(paramTypes[1].getErasure().getQualifiedName()))
-							continue;
+					// we have a (better) candidate
+					candidate = declaredMethod;
+				} else if (paramTypes.length == 2) {
+					if (priority < 1
+							&& serviceType.isEqualTo(paramTypes[0])
+							&& Map.class.getName().equals(paramTypes[1].getErasure().getQualifiedName()))
+						priority = 1;
+					else if (candidate != null
+							|| !serviceType.isAssignmentCompatible(paramTypes[0])
+							|| !Map.class.getName().equals(paramTypes[1].getErasure().getQualifiedName()))
+						continue;
 
-						// we have a candidate
-						candidate = declaredMethod;
-					}
+					// we have a candidate
+					candidate = declaredMethod;
 				}
 			}
-		} while ((testedClass = testedClass.getSuperclass()) != null);
+		}
 
 		return candidate;
 	}
