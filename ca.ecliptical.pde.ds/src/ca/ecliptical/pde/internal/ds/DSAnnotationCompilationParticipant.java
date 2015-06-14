@@ -473,9 +473,17 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		// we need to process CUs in context of a project; separate them by project
 		HashMap<IJavaProject, Map<ICompilationUnit, BuildContext>> filesByProject = new HashMap<IJavaProject, Map<ICompilationUnit, BuildContext>>();
 		for (BuildContext file : files) {
+			if (debug.isDebugging())
+				debug.trace(String.format("Creating compilation unit from file %s.", file.getFile().getFullPath()));
+
 			ICompilationUnit cu = JavaCore.createCompilationUnitFrom(file.getFile());
-			if (cu == null)
+			if (cu == null) {
+				if (debug.isDebugging())
+					// TODO should we log instead? Don't want to spam the error log though
+					debug.trace(String.format("Unable to create compilation unit from file %s.", file.getFile().getFullPath()));
+
 				continue;
+			}
 
 			Map<ICompilationUnit, BuildContext> map = filesByProject.get(cu.getJavaProject());
 			if (map == null) {
@@ -488,6 +496,9 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 		// process all CUs in each project
 		for (Map.Entry<IJavaProject, Map<ICompilationUnit, BuildContext>> entry : filesByProject.entrySet()) {
+			if (debug.isDebugging())
+				debug.trace(String.format("Processing compilation units in project %s.", entry.getKey().getElementName()));
+
 			processAnnotations(entry.getKey(), entry.getValue());
 		}
 	}

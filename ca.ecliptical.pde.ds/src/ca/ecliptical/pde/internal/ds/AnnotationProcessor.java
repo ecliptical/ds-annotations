@@ -285,8 +285,6 @@ class AnnotationVisitor extends ASTVisitor {
 			params.put(pair.getName(), pair.getValue());
 		}
 
-		boolean requiresV12 = false;
-
 		String implClass = typeBinding.getBinaryName();
 
 		String name = implClass;
@@ -388,7 +386,6 @@ class AnnotationVisitor extends ASTVisitor {
 		if ((value = params.get("configurationPid")) instanceof String) { //$NON-NLS-1$
 			configPid = (String) value;
 			validateComponentConfigPID(annotation, configPid, problems);
-			requiresV12 = true;
 		}
 
 		DSModel model = new DSModel(new Document(), false);
@@ -409,8 +406,12 @@ class AnnotationVisitor extends ASTVisitor {
 		if (configPolicy != null)
 			component.setConfigurationPolicy(configPolicy);
 
-		if (configPid != null)
+		boolean requiresV12 = false;
+
+		if (configPid != null) {
 			component.setXMLAttribute("configuration-pid", configPid); //$NON-NLS-1$
+			requiresV12 = true;
+		}
 
 		IDSDocumentFactory dsFactory = component.getModel().getFactory();
 		IDSImplementation impl = dsFactory.createImplementation();
@@ -745,8 +746,6 @@ class AnnotationVisitor extends ASTVisitor {
 			params.put(pair.getName(), pair.getValue());
 		}
 
-		boolean requiresV12 = false;
-
 		ITypeBinding[] argTypes = methodBinding.getParameterTypes();
 
 		ITypeBinding serviceType;
@@ -867,7 +866,6 @@ class AnnotationVisitor extends ASTVisitor {
 			ReferencePolicyOption policyOptionLiteral = ReferencePolicyOption.valueOf(policyOptionBinding.getName());
 			if (policyOptionLiteral != null) {
 				policyOption = policyOptionLiteral.toString();
-				requiresV12 = true;
 			}
 		}
 
@@ -884,8 +882,6 @@ class AnnotationVisitor extends ASTVisitor {
 						reportProblem(annotation, "updated", problems, NLS.bind(Messages.AnnotationProcessor_invalidReferenceUpdated, updated), updated); //$NON-NLS-1$
 				}
 			}
-
-			requiresV12 = true;
 		} else if (serviceType != null) {
 			String updatedCandidate;
 			if (methodName.startsWith("bind")) { //$NON-NLS-1$
@@ -930,11 +926,17 @@ class AnnotationVisitor extends ASTVisitor {
 		if (unbind != null)
 			reference.setReferenceUnbind(unbind);
 
-		if (policyOption != null)
-			reference.setXMLAttribute("policy-option", policyOption); //$NON-NLS-1$
+		boolean requiresV12 = false;
 
-		if (updated != null)
+		if (policyOption != null) {
+			reference.setXMLAttribute("policy-option", policyOption); //$NON-NLS-1$
+			requiresV12 = true;
+		}
+
+		if (updated != null) {
 			reference.setXMLAttribute("updated", updated); //$NON-NLS-1$
+			requiresV12 = true;
+		}
 
 		return requiresV12;
 	}
