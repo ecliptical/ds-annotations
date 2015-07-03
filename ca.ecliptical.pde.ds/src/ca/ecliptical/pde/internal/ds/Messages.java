@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Ecliptical Software Inc. and others.
+ * Copyright (c) 2012, 2015 Ecliptical Software Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Ecliptical Software Inc. - initial API and implementation
  *******************************************************************************/
@@ -33,6 +33,20 @@ public class Messages extends NLS {
 	public static String AnnotationProcessor_invalidBindMethodParameters;
 
 	public static String AnnotationProcessor_invalidBindMethodReturnType;
+
+	public static String AnnotationProcessor_invalidCompImplClass_abstract;
+
+	public static String AnnotationProcessor_invalidCompImplClass_annotation;
+
+	public static String AnnotationProcessor_invalidCompImplClass_enumeration;
+
+	public static String AnnotationProcessor_invalidCompImplClass_interface;
+
+	public static String AnnotationProcessor_invalidCompImplClass_noDefaultConstructor;
+
+	public static String AnnotationProcessor_invalidCompImplClass_notPublic;
+
+	public static String AnnotationProcessor_invalidCompImplClass_notTopLevel;
 
 	public static String AnnotationProcessor_invalidComponentConfigurationPid;
 
@@ -67,6 +81,8 @@ public class Messages extends NLS {
 	public static String AnnotationProcessor_invalidReferenceUnbind;
 
 	public static String AnnotationProcessor_invalidReferenceUpdated;
+
+	public static String AnnotationProcessor_noImplicitReferenceUnbind;
 
 	public static String AnnotationProcessor_stringOrEmpty;
 
