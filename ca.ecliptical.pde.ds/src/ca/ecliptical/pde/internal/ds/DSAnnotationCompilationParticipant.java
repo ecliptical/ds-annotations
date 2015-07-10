@@ -158,7 +158,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			result = NEEDS_FULL_BUILD;
 		}
 
-		String errorLevelStr = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.name(), new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		String errorLevelStr = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.toString(), new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
 		ValidationErrorLevel errorLevel;
 		try {
 			errorLevel = ValidationErrorLevel.valueOf(errorLevelStr);

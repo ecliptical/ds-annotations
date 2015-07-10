@@ -4,7 +4,7 @@
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Ecliptical Software Inc. - initial API and implementation
  *******************************************************************************/
@@ -194,7 +194,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 		boolean enableValue = prefs.getBoolean(Activator.PREF_ENABLED, true);
 		String pathValue = prefs.get(Activator.PREF_PATH, Activator.DEFAULT_PATH);
-		int errorLevel = prefs.getInt(Activator.PREF_VALIDATION_ERROR_LEVEL, 0);
+		String errorLevel = prefs.get(Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.toString());
 
 		if (useProjectSettings()) {
 			IScopeContext scopeContext = new ProjectScope(getProject());
@@ -202,13 +202,21 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			enableValue = prefs.getBoolean(Activator.PREF_ENABLED, enableValue);
 			pathValue = prefs.get(Activator.PREF_PATH, pathValue);
-			errorLevel = prefs.getInt(Activator.PREF_VALIDATION_ERROR_LEVEL, errorLevel);
+			errorLevel = prefs.get(Activator.PREF_VALIDATION_ERROR_LEVEL, errorLevel);
 		}
 
 		enableCheckbox.setSelection(enableValue);
 		pathText.setText(pathValue);
-		errorLevelCombo.select(errorLevel);
+		int errorLevelIndex = 0;
+		ValidationErrorLevel[] levels = ValidationErrorLevel.values();
+		for (int i = 1; i < levels.length; ++i) {
+			if (errorLevel.equals(levels[i].toString())) {
+				errorLevelIndex = i;
+				break;
+			}
+		}
 
+		errorLevelCombo.select(errorLevelIndex);
 		setErrorMessage(null);
 	}
 
@@ -313,7 +321,9 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			prefs.putBoolean(Activator.PREF_ENABLED, enableCheckbox.getSelection());
 			prefs.put(Activator.PREF_PATH, new Path(path).toString());
-			prefs.putInt(Activator.PREF_VALIDATION_ERROR_LEVEL, errorLevelCombo.getSelectionIndex());
+			ValidationErrorLevel[] levels = ValidationErrorLevel.values();
+			int errorLevelIndex = errorLevelCombo.getSelectionIndex();
+			prefs.put(Activator.PREF_VALIDATION_ERROR_LEVEL, levels[Math.max(Math.min(errorLevelIndex, levels.length - 1), 0)].toString());
 		}
 
 		try {
