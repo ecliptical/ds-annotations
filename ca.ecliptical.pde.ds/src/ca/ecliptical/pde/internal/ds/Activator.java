@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Ecliptical Software Inc. and others.
+ * Copyright (c) 2012, 2015 Ecliptical Software Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Ecliptical Software Inc. - initial API and implementation
  *******************************************************************************/
@@ -23,6 +23,8 @@ public class Activator extends AbstractUIPlugin {
 	public static final String PREF_PATH = "path"; //$NON-NLS-1$
 
 	public static final String PREF_VALIDATION_ERROR_LEVEL = "validationErrorLevel"; //$NON-NLS-1$
+
+	public static final String PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL = "validationErrorLevel.missingImplicitUnbindMethod"; //$NON-NLS-1$
 
 	public static final String DEFAULT_PATH = "OSGI-INF"; //$NON-NLS-1$
 

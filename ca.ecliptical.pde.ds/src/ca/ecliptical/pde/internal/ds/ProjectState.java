@@ -1,10 +1,10 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Ecliptical Software Inc. and others.
+ * Copyright (c) 2012, 2015 Ecliptical Software Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
  * Contributors:
  *     Ecliptical Software Inc. - initial API and implementation
  *******************************************************************************/
@@ -26,6 +26,8 @@ public class ProjectState implements Serializable {
 
 	private ValidationErrorLevel errorLevel;
 
+	private ValidationErrorLevel missingUnbindMethodLevel;
+
 	public Map<String, Collection<String>> getMappings() {
 		return mappings;
 	}
@@ -46,6 +48,14 @@ public class ProjectState implements Serializable {
 		this.errorLevel = errorLevel;
 	}
 
+	public ValidationErrorLevel getMissingUnbindMethodLevel() {
+		return missingUnbindMethodLevel == null ? getErrorLevel() : missingUnbindMethodLevel;
+	}
+
+	public void setMissingUnbindMethodLevel(ValidationErrorLevel missingUnbindMethodLevel) {
+		this.missingUnbindMethodLevel = missingUnbindMethodLevel;
+	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (obj == this)
@@ -57,6 +67,7 @@ public class ProjectState implements Serializable {
 		ProjectState o = (ProjectState) obj;
 		return (path == null ? o.path == null : path.equals(o.path))
 				&& errorLevel == o.errorLevel
+				&& missingUnbindMethodLevel == o.missingUnbindMethodLevel
 				&& mappings.equals(o.mappings);
 	}
 
@@ -65,7 +76,8 @@ public class ProjectState implements Serializable {
 		StringBuilder buf = new StringBuilder("ProjectState[path="); //$NON-NLS-1$
 		buf.append(path).append(";mappings="); //$NON-NLS-1$
 		buf.append(mappings).append(";errorLevel="); //$NON-NLS-1$
-		buf.append(errorLevel).append(']');
+		buf.append(errorLevel).append(";missingUnbindMethodLevel="); //$NON-NLS-1$
+		buf.append(missingUnbindMethodLevel).append(']');
 		return buf.toString();
 	}
 }

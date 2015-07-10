@@ -159,19 +159,30 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		}
 
 		String errorLevelStr = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.toString(), new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
-		ValidationErrorLevel errorLevel;
-		try {
-			errorLevel = ValidationErrorLevel.valueOf(errorLevelStr);
-		} catch (IllegalArgumentException e) {
-			errorLevel = ValidationErrorLevel.error;
-		}
+		ValidationErrorLevel errorLevel = getEnumValue(errorLevelStr, ValidationErrorLevel.class, ValidationErrorLevel.error);
 
 		if (errorLevel != state.getErrorLevel()) {
 			state.setErrorLevel(errorLevel);
 			result = NEEDS_FULL_BUILD;
 		}
 
+		String missingUnbindMethodLevelStr = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL, errorLevelStr, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		ValidationErrorLevel missingUnbindMethodLevel = getEnumValue(missingUnbindMethodLevelStr, ValidationErrorLevel.class, errorLevel);
+
+		if (missingUnbindMethodLevel != state.getMissingUnbindMethodLevel()) {
+			state.setMissingUnbindMethodLevel(missingUnbindMethodLevel);
+			result = NEEDS_FULL_BUILD;
+		}
+
 		return result;
+	}
+
+	private <E extends Enum<E>> E getEnumValue(String property, Class<E> enumType, E defaultValue) {
+		try {
+			return Enum.valueOf(enumType, property);
+		} catch (IllegalArgumentException e) {
+			return defaultValue;
+		}
 	}
 
 	private ProjectState loadState(IProject project) throws IOException {
@@ -517,7 +528,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 		ICompilationUnit[] cuArr = fileMap.keySet().toArray(new ICompilationUnit[fileMap.size()]);
 		Map<ICompilationUnit, Collection<IDSModel>> models = new HashMap<ICompilationUnit, Collection<IDSModel>>();
-		parser.createASTs(cuArr, new String[0], new AnnotationProcessor(models, fileMap, state.getErrorLevel()), null);
+		parser.createASTs(cuArr, new String[0], new AnnotationProcessor(models, fileMap, state.getErrorLevel(), state.getMissingUnbindMethodLevel()), null);
 
 		Map<String, Collection<String>> cuMap = state.getMappings();
 		Collection<String> unprocessed = projectContext.getUnprocessed();
@@ -621,7 +632,13 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 	public static boolean isManaged(IProject project) {
 		try {
-			return project.getSessionProperty(PROP_STATE) != null;
+			if (project.getSessionProperty(PROP_STATE) != null)
+				return true;
+
+			if (project.hasNature(PDE.PLUGIN_NATURE) && project.hasNature(JavaCore.NATURE_ID))
+				return true;
+
+			return false;
 		} catch (CoreException e) {
 			return false;
 		}

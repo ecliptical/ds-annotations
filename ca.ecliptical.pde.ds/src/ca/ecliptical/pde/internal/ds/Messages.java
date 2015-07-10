@@ -104,6 +104,8 @@ public class Messages extends NLS {
 
 	public static String DSAnnotationPropertyPage_errorMessage_path;
 
+	public static String DSAnnotationPropertyPage_missingUnbindMethodLevelLabel_text;
+
 	public static String DSAnnotationPropertyPage_pathLabel_text;
 
 	public static String DSAnnotationPropertyPage_projectCheckbox_text;

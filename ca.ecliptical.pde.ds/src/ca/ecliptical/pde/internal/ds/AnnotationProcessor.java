@@ -88,10 +88,13 @@ public class AnnotationProcessor extends ASTRequestor {
 
 	private final ValidationErrorLevel errorLevel;
 
-	public AnnotationProcessor(Map<ICompilationUnit, Collection<IDSModel>> models, Map<ICompilationUnit, BuildContext> fileMap, ValidationErrorLevel errorLevel) {
+	private final ValidationErrorLevel missingUnbindMethodLevel;
+
+	public AnnotationProcessor(Map<ICompilationUnit, Collection<IDSModel>> models, Map<ICompilationUnit, BuildContext> fileMap, ValidationErrorLevel errorLevel, ValidationErrorLevel missingUnbindMethodLevel) {
 		this.models = models;
 		this.fileMap = fileMap;
 		this.errorLevel = errorLevel;
+		this.missingUnbindMethodLevel = missingUnbindMethodLevel;
 	}
 
 	@Override
@@ -100,7 +103,7 @@ public class AnnotationProcessor extends ASTRequestor {
 		models.put(source, modelSet);
 		HashSet<DSAnnotationProblem> problems = new HashSet<DSAnnotationProblem>();
 
-		ast.accept(new AnnotationVisitor(modelSet, errorLevel, problems));
+		ast.accept(new AnnotationVisitor(modelSet, errorLevel, missingUnbindMethodLevel, problems));
 
 		if (!problems.isEmpty()) {
 			char[] filename = source.getResource().getFullPath().toString().toCharArray();
@@ -163,11 +166,14 @@ class AnnotationVisitor extends ASTVisitor {
 
 	private final ValidationErrorLevel errorLevel;
 
+	private final ValidationErrorLevel missingUnbindMethodLevel;
+
 	private final Set<DSAnnotationProblem> problems;
 
-	public AnnotationVisitor(Collection<IDSModel> models, ValidationErrorLevel errorLevel, Set<DSAnnotationProblem> problems) {
+	public AnnotationVisitor(Collection<IDSModel> models, ValidationErrorLevel errorLevel, ValidationErrorLevel missingUnbindMethodLevel, Set<DSAnnotationProblem> problems) {
 		this.models = models;
 		this.errorLevel = errorLevel;
+		this.missingUnbindMethodLevel = missingUnbindMethodLevel;
 		this.problems = problems;
 	}
 
@@ -869,7 +875,7 @@ class AnnotationVisitor extends ASTVisitor {
 			IMethodBinding unbindMethod = findUnbindMethod(methodBinding.getDeclaringClass(), serviceType, unbindCandidate, false);
 			if (unbindMethod == null) {
 				unbind = null;
-				reportProblem(annotation, null, problems, NLS.bind(Messages.AnnotationProcessor_noImplicitReferenceUnbind, unbindCandidate), unbindCandidate);
+				reportProblem(annotation, null, missingUnbindMethodLevel, problems, NLS.bind(Messages.AnnotationProcessor_noImplicitReferenceUnbind, unbindCandidate), unbindCandidate);
 			} else {
 				unbind = unbindMethod.getName();
 			}
@@ -1114,7 +1120,15 @@ class AnnotationVisitor extends ASTVisitor {
 		reportProblem(annotation, member, -1, problems, message, args);
 	}
 
+	private void reportProblem(Annotation annotation, String member, ValidationErrorLevel errorLevel, Collection<DSAnnotationProblem> problems, String message, String... args) {
+		reportProblem(annotation, member, -1, errorLevel, problems, message, args);
+	}
+
 	private void reportProblem(Annotation annotation, String member, int valueIndex, Collection<DSAnnotationProblem> problems, String message, String... args) {
+		reportProblem(annotation, member, valueIndex, errorLevel, problems, message, args);
+	}
+
+	private void reportProblem(Annotation annotation, String member, int valueIndex, ValidationErrorLevel errorLevel, Collection<DSAnnotationProblem> problems, String message, String... args) {
 		if (errorLevel.isNone())
 			return;
 

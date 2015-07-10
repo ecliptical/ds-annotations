@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 Ecliptical Software Inc. and others.
+ * Copyright (c) 2012, 2015 Ecliptical Software Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -60,6 +60,8 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 	private Text pathText;
 
 	private Combo errorLevelCombo;
+
+	private Combo missingUnbindMethodCombo;
 
 	private IWorkingCopyManager wcManager;
 
@@ -185,6 +187,17 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 		errorLevelCombo.add(Messages.DSAnnotationPropertyPage_errorLevelNone);
 		errorLevelCombo.select(0);
 
+		Label missingUnbindMethodLabel = new Label(composite, SWT.RIGHT);
+		missingUnbindMethodLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false));
+		missingUnbindMethodLabel.setText(Messages.DSAnnotationPropertyPage_missingUnbindMethodLevelLabel_text);
+
+		missingUnbindMethodCombo = new Combo(composite, SWT.DROP_DOWN | SWT.READ_ONLY | SWT.BORDER);
+		missingUnbindMethodCombo.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, true, false));
+		missingUnbindMethodCombo.add(Messages.DSAnnotationPropertyPage_errorLevelError);
+		missingUnbindMethodCombo.add(Messages.DSAnnotationPropertyPage_errorLevelWarning);
+		missingUnbindMethodCombo.add(Messages.DSAnnotationPropertyPage_errorLevelNone);
+		missingUnbindMethodCombo.select(0);
+
 		Dialog.applyDialogFont(composite);
 		return composite;
 	}
@@ -195,6 +208,7 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 		boolean enableValue = prefs.getBoolean(Activator.PREF_ENABLED, true);
 		String pathValue = prefs.get(Activator.PREF_PATH, Activator.DEFAULT_PATH);
 		String errorLevel = prefs.get(Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.toString());
+		String missingUnbindMethodLevel = prefs.get(Activator.PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL, errorLevel);
 
 		if (useProjectSettings()) {
 			IScopeContext scopeContext = new ProjectScope(getProject());
@@ -203,21 +217,24 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 			enableValue = prefs.getBoolean(Activator.PREF_ENABLED, enableValue);
 			pathValue = prefs.get(Activator.PREF_PATH, pathValue);
 			errorLevel = prefs.get(Activator.PREF_VALIDATION_ERROR_LEVEL, errorLevel);
+			missingUnbindMethodLevel = prefs.get(Activator.PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL, missingUnbindMethodLevel);
 		}
 
 		enableCheckbox.setSelection(enableValue);
 		pathText.setText(pathValue);
-		int errorLevelIndex = 0;
-		ValidationErrorLevel[] levels = ValidationErrorLevel.values();
-		for (int i = 1; i < levels.length; ++i) {
-			if (errorLevel.equals(levels[i].toString())) {
-				errorLevelIndex = i;
-				break;
-			}
+		errorLevelCombo.select(getEnumIndex(errorLevel, ValidationErrorLevel.values(), 0));
+		missingUnbindMethodCombo.select(getEnumIndex(missingUnbindMethodLevel, ValidationErrorLevel.values(), 0));
+
+		setErrorMessage(null);
+	}
+
+	private <E extends Enum<E>> int getEnumIndex(String property, E[] values, int defaultIndex) {
+		for (int i = 1; i < values.length; ++i) {
+			if (property.equals(String.valueOf(values[i])))
+				return i;
 		}
 
-		errorLevelCombo.select(errorLevelIndex);
-		setErrorMessage(null);
+		return defaultIndex;
 	}
 
 	private boolean hasProjectSpecificOptions(IProject project) {
@@ -321,9 +338,13 @@ public class DSAnnotationPropertyPage extends PropertyPage implements IWorkbench
 
 			prefs.putBoolean(Activator.PREF_ENABLED, enableCheckbox.getSelection());
 			prefs.put(Activator.PREF_PATH, new Path(path).toString());
+
 			ValidationErrorLevel[] levels = ValidationErrorLevel.values();
 			int errorLevelIndex = errorLevelCombo.getSelectionIndex();
 			prefs.put(Activator.PREF_VALIDATION_ERROR_LEVEL, levels[Math.max(Math.min(errorLevelIndex, levels.length - 1), 0)].toString());
+
+			errorLevelIndex = missingUnbindMethodCombo.getSelectionIndex();
+			prefs.put(Activator.PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL, levels[Math.max(Math.min(errorLevelIndex, levels.length - 1), 0)].toString());
 		}
 
 		try {
