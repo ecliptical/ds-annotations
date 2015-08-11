@@ -22,7 +22,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
 
@@ -58,11 +57,11 @@ import org.eclipse.pde.core.IBaseModel;
 import org.eclipse.pde.core.build.IBuildEntry;
 import org.eclipse.pde.core.build.IBuildModel;
 import org.eclipse.pde.core.build.IBuildModelFactory;
-import org.eclipse.pde.internal.core.build.WorkspaceBuildModel;
 import org.eclipse.pde.internal.core.ibundle.IBundleModel;
 import org.eclipse.pde.internal.core.ibundle.IBundlePluginModelBase;
 import org.eclipse.pde.internal.core.natures.PDE;
 import org.eclipse.pde.internal.core.project.PDEProject;
+import org.eclipse.pde.internal.ds.core.IDSImplementation;
 import org.eclipse.pde.internal.ds.core.IDSModel;
 import org.eclipse.pde.internal.ui.util.ModelModification;
 import org.eclipse.pde.internal.ui.util.PDEModelUtility;
@@ -119,38 +118,16 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 		int result = READY_FOR_BUILD;
 
-		ProjectState state = null;
-		try {
-			Object value = project.getProject().getSessionProperty(PROP_STATE);
-			if (value instanceof SoftReference<?>) {
-				@SuppressWarnings("unchecked")
-				SoftReference<ProjectState> ref = (SoftReference<ProjectState>) value;
-				state = ref.get();
-			}
-		} catch (CoreException e) {
-			Activator.getDefault().getLog().log(e.getStatus());
-		}
-
-		if (state == null) {
-			try {
-				state = loadState(project.getProject());
-			} catch (IOException e) {
-				Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error loading project state.", e)); //$NON-NLS-1$
-			}
-
-			if (state == null) {
-				state = new ProjectState();
-				result = NEEDS_FULL_BUILD;
-			}
-
-			try {
-				project.getProject().setSessionProperty(PROP_STATE, new SoftReference<ProjectState>(state));
-			} catch (CoreException e) {
-				Activator.getDefault().getLog().log(e.getStatus());
-			}
-		}
+		int[] retval = new int[1];
+		ProjectState state = getState(project, retval);
+		result = retval[0];
 
 		processingContext.put(project, new ProjectContext(state));
+
+		if (state.getFormatVersion() != ProjectState.FORMAT_VERSION) {
+			state.setFormatVersion(ProjectState.FORMAT_VERSION);
+			result = NEEDS_FULL_BUILD;
+		}
 
 		String path = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_PATH, Activator.DEFAULT_PATH, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
 		if (!path.equals(state.getPath())) {
@@ -185,9 +162,48 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		}
 	}
 
-	private ProjectState loadState(IProject project) throws IOException {
-		File workDir = project.getWorkingLocation(Activator.PLUGIN_ID).toFile();
-		File stateFile = new File(workDir, STATE_FILENAME);
+	public static ProjectState getState(IJavaProject project) {
+		return getState(project, null);
+	}
+
+	private static ProjectState getState(IJavaProject project, int[] result) {
+		ProjectState state = null;
+		try {
+			Object value = project.getProject().getSessionProperty(PROP_STATE);
+			if (value instanceof SoftReference<?>) {
+				@SuppressWarnings("unchecked")
+				SoftReference<ProjectState> ref = (SoftReference<ProjectState>) value;
+				state = ref.get();
+			}
+		} catch (CoreException e) {
+			Activator.getDefault().getLog().log(e.getStatus());
+		}
+
+		if (state == null) {
+			try {
+				state = loadState(project.getProject());
+			} catch (IOException e) {
+				Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error loading project state.", e)); //$NON-NLS-1$
+			}
+
+			if (state == null) {
+				state = new ProjectState();
+				if (result != null && result.length > 0)
+					result[0] = NEEDS_FULL_BUILD;
+			}
+
+			try {
+				project.getProject().setSessionProperty(PROP_STATE, new SoftReference<ProjectState>(state));
+			} catch (CoreException e) {
+				Activator.getDefault().getLog().log(e.getStatus());
+			}
+		}
+
+		return state;
+	}
+
+	private static ProjectState loadState(IProject project) throws IOException {
+		File stateFile = getStateFile(project);
 		if (!stateFile.canRead()) {
 			if (debug.isDebugging())
 				debug.trace(String.format("Missing or invalid project state file: %s", stateFile)); //$NON-NLS-1$
@@ -197,17 +213,19 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 		ObjectInputStream in = new ObjectInputStream(new FileInputStream(stateFile));
 		try {
-			ProjectState value = (ProjectState) in.readObject();
+			ProjectState state = (ProjectState) in.readObject();
 
 			if (debug.isDebugging()) {
 				debug.trace(String.format("Loaded state for project: %s", project.getName())); //$NON-NLS-1$
-				for (Map.Entry<String, Collection<String>> entry : value.getMappings().entrySet())
-					debug.trace(String.format("%s -> %s", entry.getKey(), entry.getValue())); //$NON-NLS-1$
+				for (String cuKey : state.getCompilationUnits())
+					debug.trace(String.format("%s -> %s", cuKey, state.getModelFiles(cuKey))); //$NON-NLS-1$
 			}
 
-			return value;
+			return state;
 		} catch (ClassNotFoundException e) {
-			throw new IOException("Unable to deserialize project state.", e); //$NON-NLS-1$
+			IOException ex = new IOException("Unable to deserialize project state."); //$NON-NLS-1$
+			ex.initCause(e);
+			throw ex;
 		} finally {
 			in.close();
 		}
@@ -219,7 +237,6 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		if (projectContext != null) {
 			ProjectState state = projectContext.getState();
 			// check if unprocessed CUs still exist; if not, their mapped files are now abandoned
-			Map<String, Collection<String>> cuMap = state.getMappings();
 			HashSet<String> abandoned = new HashSet<String>(projectContext.getAbandoned());
 			for (String cuKey : projectContext.getUnprocessed()) {
 				boolean exists = false;
@@ -236,24 +253,20 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 					if (debug.isDebugging())
 						debug.trace(String.format("Mapped CU %s no longer exists.", cuKey)); //$NON-NLS-1$
 
-					Collection<String> dsKeys = cuMap.remove(cuKey);
+					Collection<String> dsKeys = state.removeMappings(cuKey);
 					if (dsKeys != null)
 						abandoned.addAll(dsKeys);
 				}
 			}
 
-			// remove CUs with no mapped DS models
+			// retain abandoned files that are still mapped elsewhere
 			HashSet<String> retained = new HashSet<String>();
-			for (Iterator<Map.Entry<String, Collection<String>>> i = cuMap.entrySet().iterator(); i.hasNext();) {
-				Map.Entry<String, Collection<String>> entry = i.next();
-				Collection<String> dsKeys = entry.getValue();
-				if (dsKeys.isEmpty())
-					i.remove();
-				else
+			for (String cuKey : state.getCompilationUnits()) {
+				Collection<String> dsKeys = state.getModelFiles(cuKey);
+				if (dsKeys != null)
 					retained.addAll(dsKeys);
 			}
 
-			// retain abandoned files that are still mapped elsewhere
 			abandoned.removeAll(retained);
 
 			if (projectContext.isChanged()) {
@@ -285,8 +298,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			if (!deleteStatuses.isEmpty())
 				Activator.getDefault().getLog().log(new MultiStatus(Activator.PLUGIN_ID, 0, deleteStatuses.toArray(new IStatus[deleteStatuses.size()]), "Error deleting generated files.", null)); //$NON-NLS-1$
 
-			writeManifest(project.getProject(), retained, abandoned);
-			writeBuildProperties(project.getProject(), retained, abandoned);
+			updateProject(project.getProject(), retained, abandoned);
 		}
 
 		if (debug.isDebugging())
@@ -294,13 +306,12 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 	}
 
 	private void saveState(IProject project, ProjectState state) throws IOException {
-		File workDir = project.getWorkingLocation(Activator.PLUGIN_ID).toFile();
-		File stateFile = new File(workDir, STATE_FILENAME);
+		File stateFile = getStateFile(project);
 
 		if (debug.isDebugging()) {
 			debug.trace(String.format("Saving state for project: %s", project.getName())); //$NON-NLS-1$
-			for (Map.Entry<String, Collection<String>> entry : state.getMappings().entrySet())
-				debug.trace(String.format("%s -> %s", entry.getKey(), entry.getValue())); //$NON-NLS-1$
+			for (String cuKey : state.getCompilationUnits())
+				debug.trace(String.format("%s -> %s", cuKey, state.getModelFiles(cuKey))); //$NON-NLS-1$
 		}
 
 		ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(stateFile));
@@ -311,12 +322,21 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		}
 	}
 
-	private void writeManifest(IProject project, final Collection<String> retained, final Collection<String> abandoned) {
+	private void updateProject(IProject project, final Collection<String> retained, final Collection<String> abandoned) {
 		PDEModelUtility.modifyModel(new ModelModification(project) {
 			@Override
 			protected void modifyModel(IBaseModel model, IProgressMonitor monitor) throws CoreException {
 				if (model instanceof IBundlePluginModelBase)
 					updateManifest((IBundlePluginModelBase) model, retained, abandoned);
+			}
+		}, null);
+
+		// note: we can't combine both manifest and build.properties into a single edit
+		PDEModelUtility.modifyModel(new ModelModification(PDEProject.getBuildProperties(project)) {
+			@Override
+			protected void modifyModel(IBaseModel model, IProgressMonitor monitor) throws CoreException {
+				if (model instanceof IBuildModel)
+					updateBuildProperties((IBuildModel) model, retained, abandoned);
 			}
 		}, null);
 	}
@@ -349,11 +369,12 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			buf.append(entry.toString());
 		}
 
-		String value = buf.length() == 0 ? null : buf.toString();
+		String value = buf.toString();
 
 		if (debug.isDebugging())
 			debug.trace(String.format("Setting manifest header in %s to %s: %s", model.getUnderlyingResource().getFullPath(), DS_MANIFEST_KEY, value)); //$NON-NLS-1$
 
+		// note: contrary to javadoc, setting header value to null does *not* remove it; setting it to empty string does
 		bundleModel.getBundle().setHeader(DS_MANIFEST_KEY, value);
 	}
 
@@ -364,7 +385,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 		String[] elements = header.split("\\s*,\\s*"); //$NON-NLS-1$
 		for (String element : elements) {
-			if (!element.isEmpty())
+			if (element.length() != 0)
 				entries.add(new Path(element));
 		}
 	}
@@ -393,37 +414,6 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 	private String sanitizeFilterValue(String value) {
 		return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$
-	}
-
-	private void writeBuildProperties(final IProject project, final Collection<String> retained, final Collection<String> abandoned) {
-		//		PDEModelUtility.modifyModel(new ModelModification(PDEProject.getBuildProperties(project)) {
-		//			@Override
-		//			protected void modifyModel(IBaseModel model, IProgressMonitor monitor) throws CoreException {
-		//				if (model instanceof IBuildModel) {
-		IFile file = PDEProject.getBuildProperties(project);
-		if (!file.exists())
-			return;
-
-		WorkspaceBuildModel wbm = new WorkspaceBuildModel(file);
-		wbm.load();
-		if (!wbm.isLoaded())
-			return;
-
-		try {
-			updateBuildProperties(wbm, retained, abandoned);
-		} catch (CoreException e) {
-			Activator.getDefault().getLog().log(e.getStatus());
-		}
-
-		if (wbm.isDirty()) {
-			if (debug.isDebugging())
-				debug.trace(String.format("Updating %s with %s", file.getFullPath(), wbm.getBuild().getEntry(IBuildEntry.BIN_INCLUDES))); //$NON-NLS-1$
-
-			wbm.save();
-		}
-		//				}
-		//			}
-		//		}, null);
 	}
 
 	private void updateBuildProperties(IBuildModel model, Collection<String> retained, Collection<String> abandoned) throws CoreException {
@@ -460,7 +450,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			return;
 
 		for (String include : includes.getTokens()) {
-			if (!(include = include.trim()).isEmpty())
+			if ((include = include.trim()).length() != 0)
 				entries.add(new Path(include));
 		}
 	}
@@ -530,7 +520,6 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		Map<ICompilationUnit, Collection<IDSModel>> models = new HashMap<ICompilationUnit, Collection<IDSModel>>();
 		parser.createASTs(cuArr, new String[0], new AnnotationProcessor(models, fileMap, state.getErrorLevel(), state.getMissingUnbindMethodLevel()), null);
 
-		Map<String, Collection<String>> cuMap = state.getMappings();
 		Collection<String> unprocessed = projectContext.getUnprocessed();
 		Collection<String> abandoned = projectContext.getAbandoned();
 
@@ -550,21 +539,17 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			String cuKey = cuType.getFullyQualifiedName();
 
 			unprocessed.remove(cuKey);
-			Collection<String> oldDSKeys = cuMap.remove(cuKey);
-			Collection<String> dsKeys = new HashSet<String>();
-			cuMap.put(cuKey, dsKeys);
+			HashMap<String, String> dsKeys = new HashMap<String, String>();
 
 			for (IDSModel model : entry.getValue()) {
 				String compName = model.getDSComponent().getAttributeName();
 				IPath filePath = outputPath.append(compName).addFileExtension("xml"); //$NON-NLS-1$
 				String dsKey = filePath.toPortableString();
 
-				// exclude file from garbage collection
-				if (oldDSKeys != null)
-					oldDSKeys.remove(dsKey);
-
 				// add file to CU mapping
-				dsKeys.add(dsKey);
+				IDSImplementation impl = model.getDSComponent().getImplementation();
+				String className = impl.getClassName();
+				dsKeys.put(className, dsKey);
 
 				// actually save the file
 				IFile compFile = PDEProject.getBundleRelativeFile(javaProject.getProject(), filePath);
@@ -591,13 +576,30 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 				if (debug.isDebugging())
 					debug.trace(String.format("Saving model: %s", compFile.getFullPath())); //$NON-NLS-1$
 
+				// handle file move/rename
+				String oldCompFilePath = state.getModelFile(className);
+				if (oldCompFilePath != null && !oldCompFilePath.equals(dsKey) && !compFile.exists()) {
+					IFile oldCompFile = PDEProject.getBundleRelativeFile(javaProject.getProject(), Path.fromPortableString(oldCompFilePath));
+					if (oldCompFile.exists()) {
+						try {
+							oldCompFile.move(compFile.getFullPath(), true, true, null);
+						} catch (CoreException e) {
+							Activator.getDefault().getLog().log(new Status(IStatus.WARNING, Activator.PLUGIN_ID, String.format("Unable to move model file from '%s' to '%s'.", oldCompFilePath, compFile.getFullPath()), e)); //$NON-NLS-1$
+						}
+					}
+				}
+
 				model.save();
 				model.dispose();
 			}
 
+			Collection<String> oldDSKeys = state.updateMappings(cuKey, dsKeys);
+
 			// track abandoned files (may be garbage)
-			if (oldDSKeys != null)
+			if (oldDSKeys != null) {
+				oldDSKeys.removeAll(dsKeys.values());
 				abandoned.addAll(oldDSKeys);
+			}
 		}
 	}
 
@@ -635,12 +637,33 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			if (project.getSessionProperty(PROP_STATE) != null)
 				return true;
 
-			if (project.hasNature(PDE.PLUGIN_NATURE) && project.hasNature(JavaCore.NATURE_ID))
-				return true;
-
-			return false;
+			File stateFile = getStateFile(project);
+			return stateFile.canRead();
 		} catch (CoreException e) {
 			return false;
 		}
 	}
+
+	private static File getStateFile(IProject project) {
+		File workDir = project.getWorkingLocation(Activator.PLUGIN_ID).toFile();
+		File stateFile = new File(workDir, STATE_FILENAME);
+		return stateFile;
+	}
+
+	//	public static IPath getModelFile(IJavaProject project, String className) {
+	//		ProjectState state = null;
+	//		try {
+	//			state = loadState(project.getProject());
+	//		} catch (IOException e) {
+	//			Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error loading project state.", e)); //$NON-NLS-1$
+	//		}
+	//
+	//		if (state != null) {
+	//			String modelFile = state.getModelFile(className);
+	//			if (modelFile != null)
+	//				return Path.fromPortableString(modelFile);
+	//		}
+	//
+	//		return null;
+	//	}
 }

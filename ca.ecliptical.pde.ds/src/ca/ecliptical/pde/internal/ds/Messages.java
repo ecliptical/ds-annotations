@@ -88,6 +88,16 @@ public class Messages extends NLS {
 
 	public static String AnnotationProcessor_unknownServiceTypeLabel;
 
+	public static String ComponentMoveParticipant_name;
+
+	public static String ComponentRefactoringHelper_checkConditionsTaskLabel;
+
+	public static String ComponentRefactoringHelper_createChangeTaskLabel;
+
+	public static String ComponentRefactoringHelper_topLevelChangeLabel;
+
+	public static String ComponentRenameParticipant_name;
+
 	public static String DSAnnotationPreferenceListener_jobName;
 
 	public static String DSAnnotationPreferenceListener_taskName;

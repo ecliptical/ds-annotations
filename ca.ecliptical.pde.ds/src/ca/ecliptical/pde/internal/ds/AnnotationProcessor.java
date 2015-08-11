@@ -489,7 +489,7 @@ class AnnotationVisitor extends ASTVisitor {
 					}
 
 					if (!errorLevel.isNone()) {
-						String expected = property.getPropertyType() == null || property.getPropertyType().isEmpty() || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
+						String expected = property.getPropertyType() == null || property.getPropertyType().length() == 0 || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
 						String actual = propertyType == null || String.class.getSimpleName().equals(propertyType) ? Messages.AnnotationProcessor_stringOrEmpty : propertyType;
 						if (!actual.equals(expected))
 							reportProblem(annotation, "property", i, problems, NLS.bind(Messages.AnnotationProcessor_inconsistentComponentPropertyType, actual, expected), actual); //$NON-NLS-1$
@@ -650,7 +650,7 @@ class AnnotationVisitor extends ASTVisitor {
 			return;
 
 		if (PROPERTY_TYPES.contains(type)) {
-			if (name == null || name.trim().isEmpty())
+			if (name == null || name.trim().length() == 0)
 				reportProblem(annotation, "property", index, problems, Messages.AnnotationProcessor_invalidComponentProperty_nameRequired, name); //$NON-NLS-1$
 
 			if (value == null) {

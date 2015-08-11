@@ -12,15 +12,21 @@ package ca.ecliptical.pde.internal.ds;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
-public class ProjectState implements Serializable {
+public class ProjectState implements Serializable, Cloneable {
 
 	private static final long serialVersionUID = 8616641822921441882L;
 
-	// classpath-relative CU path (portable) to plugin-root-relative (portable) paths of generated DS files
-	private final Map<String, Collection<String>> mappings = new HashMap<String, Collection<String>>();
+	// current state file format version
+	public static final int FORMAT_VERSION = 1;
+
+	// fully-qualified CU type (primary) to plugin-root-relative (portable) paths of generated DS files (deprecated)
+	// note: we keep it non-null in case user downgrades to older plugin version where old logic depends on that
+	private /*final*/ Map<String, Collection<String>> mappings = new HashMap<String, Collection<String>>();
 
 	private String path;
 
@@ -28,8 +34,85 @@ public class ProjectState implements Serializable {
 
 	private ValidationErrorLevel missingUnbindMethodLevel;
 
-	public Map<String, Collection<String>> getMappings() {
-		return mappings;
+	// fully-qualified CU type (primary) to fully-qualified component types contained in the CU (including primary, if component)
+	private Map<String, Collection<String>> types;
+
+	// fully-qualified component type to plugin-root-relative (portable) path of corresponding generated DS file
+	private Map<String, String> files;
+
+	// (de)serialized state file format version
+	private int formatVersion = FORMAT_VERSION;
+
+	public int getFormatVersion() {
+		return formatVersion;
+	}
+
+	public void setFormatVersion(int formatVersion) {
+		this.formatVersion = formatVersion;
+	}
+
+	public Collection<String> getCompilationUnits() {
+		if (types == null) {
+			// fall back to (deprecated) mappings
+			return Collections.unmodifiableCollection(mappings.keySet());
+		}
+
+		return Collections.unmodifiableCollection(types.keySet());
+	}
+
+	public Collection<String> removeMappings(String cuKey) {
+		if (types == null) {
+			// fall back to (deprecated) mappings
+			return mappings.remove(cuKey);
+		}
+
+		Collection<String> cuTypes = types.remove(cuKey);
+		if (cuTypes == null)
+			return null;
+
+		Collection<String> oldDSKeys = null;
+		if (files != null) {
+			oldDSKeys = new HashSet<String>(cuTypes.size());
+			for (String type : cuTypes) {
+				String dsKey = files.remove(type);
+				if (dsKey != null)
+					oldDSKeys.add(dsKey);
+			}
+		}
+
+		return oldDSKeys;
+	}
+
+	public Collection<String> getModelFiles(String cuKey) {
+		if (types == null) {
+			// fall back to (deprecated) mappings
+			Collection<String> files = mappings.get(cuKey);
+			return files == null ? null : Collections.unmodifiableCollection(files);
+		}
+
+		Collection<String> cuTypes = types.get(cuKey);
+		if (cuTypes == null || files == null)
+			return null;
+
+		HashSet<String> cuFiles = new HashSet<String>(cuTypes.size());
+		for (String type : cuTypes)
+			cuFiles.add(files.get(type));
+
+		return Collections.unmodifiableCollection(cuFiles);
+	}
+
+	public String getModelFile(String className) {
+		return files == null ? null : files.get(className);
+	}
+
+	public Collection<String> updateMappings(String cuKey, HashMap<String, String> dsKeys) {
+		Collection<String> oldDSKeys = removeMappings(cuKey);
+		if (!dsKeys.isEmpty()) {
+			getTypes().put(cuKey, new HashSet<String>(dsKeys.keySet()));
+			getFiles().putAll(dsKeys);
+		}
+
+		return oldDSKeys;
 	}
 
 	public String getPath() {
@@ -56,6 +139,46 @@ public class ProjectState implements Serializable {
 		this.missingUnbindMethodLevel = missingUnbindMethodLevel;
 	}
 
+	private Map<String, Collection<String>> getTypes() {
+		if (types == null)
+			types = new HashMap<String, Collection<String>>();
+
+		return types;
+	}
+
+	private Map<String, String> getFiles() {
+		if (files == null)
+			files = new HashMap<String, String>();
+
+		return files;
+	}
+
+	@Override
+	public ProjectState clone() {
+		ProjectState clone;
+		try {
+			clone = (ProjectState) super.clone();
+		} catch (CloneNotSupportedException e) {
+			throw new UnsupportedOperationException();
+		}
+
+		clone.mappings = new HashMap<String, Collection<String>>(mappings.size());
+		for (Map.Entry<String, Collection<String>> entry : mappings.entrySet())
+			clone.mappings.put(entry.getKey(), new HashSet<String>(entry.getValue()));
+
+		if (types != null) {
+			clone.types = new HashMap<String, Collection<String>>(types.size());
+			for (Map.Entry<String, Collection<String>> entry : types.entrySet())
+				clone.types.put(entry.getKey(), new HashSet<String>(entry.getValue()));
+		}
+
+		if (files != null) {
+			clone.files = new HashMap<String, String>(files);
+		}
+
+		return clone;
+	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (obj == this)
@@ -65,19 +188,25 @@ public class ProjectState implements Serializable {
 			return false;
 
 		ProjectState o = (ProjectState) obj;
-		return (path == null ? o.path == null : path.equals(o.path))
+		return formatVersion == o.formatVersion
+				&& (path == null ? o.path == null : path.equals(o.path))
 				&& errorLevel == o.errorLevel
 				&& missingUnbindMethodLevel == o.missingUnbindMethodLevel
-				&& mappings.equals(o.mappings);
+				&& mappings.equals(o.mappings)
+				&& (files == null ? o.files == null : files.equals(o.files))
+				&& (types == null ? o.types == null : types.equals(o.types));
 	}
 
 	@Override
 	public String toString() {
 		StringBuilder buf = new StringBuilder("ProjectState[path="); //$NON-NLS-1$
 		buf.append(path).append(";mappings="); //$NON-NLS-1$
-		buf.append(mappings).append(";errorLevel="); //$NON-NLS-1$
+		buf.append(mappings).append(";types="); //$NON-NLS-1$
+		buf.append(types).append(";files="); //$NON-NLS-1$
+		buf.append(files).append(";errorLevel="); //$NON-NLS-1$
 		buf.append(errorLevel).append(";missingUnbindMethodLevel="); //$NON-NLS-1$
-		buf.append(missingUnbindMethodLevel).append(']');
+		buf.append(missingUnbindMethodLevel).append(";formatVersion="); //$NON-NLS-1$
+		buf.append(formatVersion).append(']');
 		return buf.toString();
 	}
 }
