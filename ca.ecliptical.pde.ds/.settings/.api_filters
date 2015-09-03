@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<component id="ca.ecliptical.pde.ds" version="2">
+    <resource path="src/ca/ecliptical/pde/internal/ds/AnnotationProcessor.java" type="ca.ecliptical.pde.internal.ds.AnnotationVisitor">
+        <filter id="572522506">
+            <message_arguments>
+                <message_argument value="ModelChangedEvent"/>
+                <message_argument value="AnnotationVisitor"/>
+            </message_arguments>
+        </filter>
+    </resource>
+</component>

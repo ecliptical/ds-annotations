@@ -25,12 +25,8 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 
-import org.eclipse.core.resources.ICommand;
-import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
-import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.IProjectDescription;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ProjectScope;
 import org.eclipse.core.runtime.CoreException;
@@ -45,6 +41,7 @@ import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.preferences.IScopeContext;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaCore;
@@ -61,8 +58,6 @@ import org.eclipse.pde.internal.core.ibundle.IBundleModel;
 import org.eclipse.pde.internal.core.ibundle.IBundlePluginModelBase;
 import org.eclipse.pde.internal.core.natures.PDE;
 import org.eclipse.pde.internal.core.project.PDEProject;
-import org.eclipse.pde.internal.ds.core.IDSImplementation;
-import org.eclipse.pde.internal.ds.core.IDSModel;
 import org.eclipse.pde.internal.ui.util.ModelModification;
 import org.eclipse.pde.internal.ui.util.PDEModelUtility;
 import org.osgi.framework.Filter;
@@ -72,8 +67,6 @@ import org.osgi.service.component.annotations.Component;
 
 @SuppressWarnings("restriction")
 public class DSAnnotationCompilationParticipant extends CompilationParticipant {
-
-	private static final String DS_BUILDER = "org.eclipse.pde.ds.core.builder"; //$NON-NLS-1$
 
 	private static final String DS_MANIFEST_KEY = "Service-Component"; //$NON-NLS-1$
 
@@ -241,9 +234,9 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			for (String cuKey : projectContext.getUnprocessed()) {
 				boolean exists = false;
 				try {
-					IType cuType = project.findType(cuKey);
+					IJavaElement cu = project.findElement(new Path(cuKey));
 					IResource file;
-					if (cuType != null && (file = cuType.getResource()) != null && file.exists())
+					if (cu != null && cu.getElementType() == IJavaElement.COMPILATION_UNIT && (file = cu.getResource()) != null && file.exists())
 						exists = true;
 				} catch (JavaModelException e) {
 					Activator.getDefault().getLog().log(e.getStatus());
@@ -517,119 +510,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		parser.setIgnoreMethodBodies(state.getErrorLevel() == ValidationErrorLevel.none);
 
 		ICompilationUnit[] cuArr = fileMap.keySet().toArray(new ICompilationUnit[fileMap.size()]);
-		Map<ICompilationUnit, Collection<IDSModel>> models = new HashMap<ICompilationUnit, Collection<IDSModel>>();
-		parser.createASTs(cuArr, new String[0], new AnnotationProcessor(models, fileMap, state.getErrorLevel(), state.getMissingUnbindMethodLevel()), null);
-
-		Collection<String> unprocessed = projectContext.getUnprocessed();
-		Collection<String> abandoned = projectContext.getAbandoned();
-
-		IPath outputPath = new Path(state.getPath()).addTrailingSeparator();
-
-		// save each model to a file; track changes to mappings
-		for (Map.Entry<ICompilationUnit, Collection<IDSModel>> entry : models.entrySet()) {
-			ICompilationUnit cu = entry.getKey();
-			IType cuType = cu.findPrimaryType();
-			if (cuType == null) {
-				if (debug.isDebugging())
-					debug.trace(String.format("CU %s has no primary type!", cu.getElementName())); //$NON-NLS-1$
-
-				continue;	// should never happen
-			}
-
-			String cuKey = cuType.getFullyQualifiedName();
-
-			unprocessed.remove(cuKey);
-			HashMap<String, String> dsKeys = new HashMap<String, String>();
-
-			for (IDSModel model : entry.getValue()) {
-				String compName = model.getDSComponent().getAttributeName();
-				IPath filePath = outputPath.append(compName).addFileExtension("xml"); //$NON-NLS-1$
-				String dsKey = filePath.toPortableString();
-
-				// add file to CU mapping
-				IDSImplementation impl = model.getDSComponent().getImplementation();
-				String className = impl.getClassName();
-				dsKeys.put(className, dsKey);
-
-				// actually save the file
-				IFile compFile = PDEProject.getBundleRelativeFile(javaProject.getProject(), filePath);
-				model.setUnderlyingResource(compFile);
-
-				try {
-					ensureDSProject(compFile.getProject());
-				} catch (CoreException e) {
-					Activator.getDefault().getLog().log(e.getStatus());
-				}
-
-				IPath parentPath = compFile.getParent().getProjectRelativePath();
-				if (!parentPath.isEmpty()) {
-					IFolder folder = javaProject.getProject().getFolder(parentPath);
-					try {
-						ensureExists(folder);
-					} catch (CoreException e) {
-						Activator.getDefault().getLog().log(e.getStatus());
-						model.dispose();
-						continue;
-					}
-				}
-
-				if (debug.isDebugging())
-					debug.trace(String.format("Saving model: %s", compFile.getFullPath())); //$NON-NLS-1$
-
-				// handle file move/rename
-				String oldCompFilePath = state.getModelFile(className);
-				if (oldCompFilePath != null && !oldCompFilePath.equals(dsKey) && !compFile.exists()) {
-					IFile oldCompFile = PDEProject.getBundleRelativeFile(javaProject.getProject(), Path.fromPortableString(oldCompFilePath));
-					if (oldCompFile.exists()) {
-						try {
-							oldCompFile.move(compFile.getFullPath(), true, true, null);
-						} catch (CoreException e) {
-							Activator.getDefault().getLog().log(new Status(IStatus.WARNING, Activator.PLUGIN_ID, String.format("Unable to move model file from '%s' to '%s'.", oldCompFilePath, compFile.getFullPath()), e)); //$NON-NLS-1$
-						}
-					}
-				}
-
-				model.save();
-				model.dispose();
-			}
-
-			Collection<String> oldDSKeys = state.updateMappings(cuKey, dsKeys);
-
-			// track abandoned files (may be garbage)
-			if (oldDSKeys != null) {
-				oldDSKeys.removeAll(dsKeys.values());
-				abandoned.addAll(oldDSKeys);
-			}
-		}
-	}
-
-	private void ensureDSProject(IProject project) throws CoreException {
-		IProjectDescription description = project.getDescription();
-		ICommand[] commands = description.getBuildSpec();
-
-		for (ICommand command : commands) {
-			if (DS_BUILDER.equals(command.getBuilderName()))
-				return;
-		}
-
-		ICommand[] newCommands = new ICommand[commands.length + 1];
-		System.arraycopy(commands, 0, newCommands, 0, commands.length);
-		ICommand command = description.newCommand();
-		command.setBuilderName(DS_BUILDER);
-		newCommands[newCommands.length - 1] = command;
-		description.setBuildSpec(newCommands);
-		project.setDescription(description, null);
-	}
-
-	private void ensureExists(IFolder folder) throws CoreException {
-		if (folder.exists())
-			return;
-
-		IContainer parent = folder.getParent();
-		if (parent != null && parent.getType() == IResource.FOLDER)
-			ensureExists((IFolder) parent);
-
-		folder.create(true, true, null);
+		parser.createASTs(cuArr, new String[0], new AnnotationProcessor(projectContext, fileMap), null);
 	}
 
 	public static boolean isManaged(IProject project) {
@@ -649,21 +530,4 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		File stateFile = new File(workDir, STATE_FILENAME);
 		return stateFile;
 	}
-
-	//	public static IPath getModelFile(IJavaProject project, String className) {
-	//		ProjectState state = null;
-	//		try {
-	//			state = loadState(project.getProject());
-	//		} catch (IOException e) {
-	//			Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error loading project state.", e)); //$NON-NLS-1$
-	//		}
-	//
-	//		if (state != null) {
-	//			String modelFile = state.getModelFile(className);
-	//			if (modelFile != null)
-	//				return Path.fromPortableString(modelFile);
-	//		}
-	//
-	//		return null;
-	//	}
 }

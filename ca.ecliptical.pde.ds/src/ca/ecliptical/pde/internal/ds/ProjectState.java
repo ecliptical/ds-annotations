@@ -11,11 +11,15 @@
 package ca.ecliptical.pde.internal.ds;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.ListIterator;
 import java.util.Map;
+
+import org.eclipse.jdt.core.JavaCore;
 
 public class ProjectState implements Serializable, Cloneable {
 
@@ -24,7 +28,7 @@ public class ProjectState implements Serializable, Cloneable {
 	// current state file format version
 	public static final int FORMAT_VERSION = 1;
 
-	// fully-qualified CU type (primary) to plugin-root-relative (portable) paths of generated DS files (deprecated)
+	// package-prefixed CU name (w/out file extension) to plugin-root-relative (portable) paths of generated DS files (deprecated)
 	// note: we keep it non-null in case user downgrades to older plugin version where old logic depends on that
 	private /*final*/ Map<String, Collection<String>> mappings = new HashMap<String, Collection<String>>();
 
@@ -34,7 +38,7 @@ public class ProjectState implements Serializable, Cloneable {
 
 	private ValidationErrorLevel missingUnbindMethodLevel;
 
-	// fully-qualified CU type (primary) to fully-qualified component types contained in the CU (including primary, if component)
+	// package fragment root-relative CU path to fully-qualified component types contained in the CU
 	private Map<String, Collection<String>> types;
 
 	// fully-qualified component type to plugin-root-relative (portable) path of corresponding generated DS file
@@ -54,16 +58,25 @@ public class ProjectState implements Serializable, Cloneable {
 	public Collection<String> getCompilationUnits() {
 		if (types == null) {
 			// fall back to (deprecated) mappings
-			return Collections.unmodifiableCollection(mappings.keySet());
+			ArrayList<String> translated = new ArrayList<String>(mappings.keySet());
+			for (ListIterator<String> i = translated.listIterator(); i.hasNext();) {
+				i.set(fromLegacyCUKey(i.next()));
+			}
+
+			return translated;
 		}
 
 		return Collections.unmodifiableCollection(types.keySet());
 	}
 
+	private String fromLegacyCUKey(String cuKey) {
+		return String.format("%s.java", cuKey.replace('.', '/')); //$NON-NLS-1$
+	}
+
 	public Collection<String> removeMappings(String cuKey) {
 		if (types == null) {
 			// fall back to (deprecated) mappings
-			return mappings.remove(cuKey);
+			return mappings.remove(toLegacyCUKey(cuKey));
 		}
 
 		Collection<String> cuTypes = types.remove(cuKey);
@@ -86,7 +99,7 @@ public class ProjectState implements Serializable, Cloneable {
 	public Collection<String> getModelFiles(String cuKey) {
 		if (types == null) {
 			// fall back to (deprecated) mappings
-			Collection<String> files = mappings.get(cuKey);
+			Collection<String> files = mappings.get(toLegacyCUKey(cuKey));
 			return files == null ? null : Collections.unmodifiableCollection(files);
 		}
 
@@ -95,10 +108,17 @@ public class ProjectState implements Serializable, Cloneable {
 			return null;
 
 		HashSet<String> cuFiles = new HashSet<String>(cuTypes.size());
-		for (String type : cuTypes)
-			cuFiles.add(files.get(type));
+		for (String type : cuTypes) {
+			String dsKey = files.get(type);
+			if (dsKey != null)
+				cuFiles.add(dsKey);
+		}
 
 		return Collections.unmodifiableCollection(cuFiles);
+	}
+
+	private Object toLegacyCUKey(String cuKey) {
+		return JavaCore.removeJavaLikeExtension(cuKey).replace('.', '/');
 	}
 
 	public String getModelFile(String className) {
