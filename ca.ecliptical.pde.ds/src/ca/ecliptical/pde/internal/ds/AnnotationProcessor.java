@@ -10,11 +10,13 @@
  *******************************************************************************/
 package ca.ecliptical.pde.internal.ds;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -25,6 +27,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -250,19 +253,21 @@ class AnnotationVisitor extends ASTVisitor {
 
 	private static final String ATTRIBUTE_REFERENCE_UPDATED = "updated"; //$NON-NLS-1$
 
+	private static final String VALUE_REFERENCE_POLICY_OPTION_RELUCTANT = "reluctant"; //$NON-NLS-1$
+
 	private static final Set<String> PROPERTY_TYPES = Collections.unmodifiableSet(
 			new HashSet<String>(
 					Arrays.asList(
 							null,
-							String.class.getSimpleName(),
-							Long.class.getSimpleName(),
-							Double.class.getSimpleName(),
-							Float.class.getSimpleName(),
-							Integer.class.getSimpleName(),
-							Byte.class.getSimpleName(),
-							Character.class.getSimpleName(),
-							Boolean.class.getSimpleName(),
-							Short.class.getSimpleName())));
+							IDSConstants.VALUE_PROPERTY_TYPE_STRING,
+							IDSConstants.VALUE_PROPERTY_TYPE_LONG,
+							IDSConstants.VALUE_PROPERTY_TYPE_DOUBLE,
+							IDSConstants.VALUE_PROPERTY_TYPE_FLOAT,
+							IDSConstants.VALUE_PROPERTY_TYPE_INTEGER,
+							IDSConstants.VALUE_PROPERTY_TYPE_BYTE,
+							IDSConstants.VALUE_PROPERTY_TYPE_CHAR,
+							IDSConstants.VALUE_PROPERTY_TYPE_BOOLEAN,
+							IDSConstants.VALUE_PROPERTY_TYPE_SHORT)));
 
 	private static final Comparator<IDSReference> REF_NAME_COMPARATOR = new Comparator<IDSReference>() {
 
@@ -668,46 +673,42 @@ class AnnotationVisitor extends ASTVisitor {
 		IDSComponent component = model.getDSComponent();
 
 		if (enabled == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_ENABLED);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_ENABLED, IDSConstants.VALUE_TRUE);
 		} else {
 			component.setEnabled(enabled.booleanValue());
 		}
 
 		if (name == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_NAME);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_NAME, null);
 		} else {
 			component.setAttributeName(name);
 		}
 
 		if (factory == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_FACTORY);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_FACTORY, null);
 		} else {
 			component.setFactory(factory);
 		}
 
 		if (immediate == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_IMMEDIATE);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_IMMEDIATE, null);
 		} else {
 			component.setImmediate(immediate.booleanValue());
 		}
 
 		if (configPolicy == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_CONFIGURATION_POLICY);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_CONFIGURATION_POLICY, IDSConstants.VALUE_CONFIGURATION_POLICY_OPTIONAL);
 		} else {
 			component.setConfigurationPolicy(configPolicy);
 		}
 
-		IDSDocumentFactory dsFactory = component.getModel().getFactory();
+		IDSDocumentFactory dsFactory = model.getFactory();
 
 		IDSProperty[] propElements = component.getPropertyElements();
 		if (properties.length == 0) {
 			removeChildren(component, Arrays.asList(propElements));
 		} else {
-			HashMap<String, IDSProperty> propMap = new HashMap<String, IDSProperty>(propElements.length);
-			for (IDSProperty propElement : propElements) {
-				propMap.put(propElement.getPropertyName(), propElement);
-			}
-
+			// build up new property elements
 			LinkedHashMap<String, IDSProperty> map = new LinkedHashMap<String, IDSProperty>(properties.length);
 			for (int i = 0; i < properties.length; ++i) {
 				String propertyStr = properties[i];
@@ -726,27 +727,19 @@ class AnnotationVisitor extends ASTVisitor {
 
 				IDSProperty property = map.get(propertyName);
 				if (property == null) {
-					// create a new property or reuse existing
-					property = propMap.remove(propertyName);
-					if (property == null) {
-						property = dsFactory.createProperty();
-					} else {
-						IDocumentTextNode textNode = property.getTextNode();
-						if (textNode != null) {
-							property.removeTextNode();
-							if (property.isInTheModel() && property.isEditable()) {
-								model.fireModelChanged(new ModelChangedEvent(model, IModelChangedEvent.REMOVE, new Object[] { textNode }, null));
-							}
-						}
-					}
-
+					// create a new property
+					property = dsFactory.createProperty();
 					map.put(propertyName, property);
 					property.setPropertyName(propertyName);
-					property.setPropertyType(propertyType);
+					if (propertyType == null)
+						removeAttribute(property, IDSConstants.ATTRIBUTE_PROPERTY_TYPE, null);	 // just remove the attribute completely so we can detect changes when reconciling
+					else
+						property.setPropertyType(propertyType);
+
 					property.setPropertyValue(propertyValue);
 					validateComponentProperty(annotation, propertyName, propertyType, propertyValue, i, problems);
 				} else {
-					// property exists; make it multi-valued
+					// property is multi-valued
 					String content = property.getPropertyElemBody();
 					if (content == null) {
 						content = property.getPropertyValue();
@@ -755,8 +748,8 @@ class AnnotationVisitor extends ASTVisitor {
 					}
 
 					if (!errorLevel.isNone()) {
-						String expected = property.getPropertyType() == null || property.getPropertyType().length() == 0 || String.class.getSimpleName().equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
-						String actual = propertyType == null || String.class.getSimpleName().equals(propertyType) ? Messages.AnnotationProcessor_stringOrEmpty : propertyType;
+						String expected = property.getPropertyType() == null || property.getPropertyType().length() == 0 || IDSConstants.VALUE_PROPERTY_TYPE_STRING.equals(property.getPropertyType()) ? Messages.AnnotationProcessor_stringOrEmpty : property.getPropertyType();
+						String actual = propertyType == null || IDSConstants.VALUE_PROPERTY_TYPE_STRING.equals(propertyType) ? Messages.AnnotationProcessor_stringOrEmpty : propertyType;
 						if (!actual.equals(expected))
 							reportProblem(annotation, "property", i, problems, NLS.bind(Messages.AnnotationProcessor_inconsistentComponentPropertyType, actual, expected), actual); //$NON-NLS-1$
 						else
@@ -768,12 +761,50 @@ class AnnotationVisitor extends ASTVisitor {
 				}
 			}
 
+			// reconcile against existing property elements
+			HashMap<String, IDSProperty> propMap = new HashMap<String, IDSProperty>(propElements.length);
+			for (IDSProperty propElement : propElements) {
+				propMap.put(propElement.getPropertyName(), propElement);
+			}
+
+			ArrayList<IDSProperty> propList = new ArrayList<IDSProperty>(map.values());
+			for (ListIterator<IDSProperty> i = propList.listIterator(); i.hasNext();) {
+				IDSProperty newProperty = i.next();
+				IDSProperty property = propMap.remove(newProperty.getPropertyName());
+				if (property == null)
+					continue;
+
+				i.set(property);
+
+				String newPropertyType = newProperty.getPropertyType();
+				if (newPropertyType != null || !IDSConstants.VALUE_PROPERTY_TYPE_STRING.equals(property.getPropertyType()))
+					property.setPropertyType(newPropertyType);
+
+				String newContent = newProperty.getPropertyElemBody();
+				if (newContent == null) {
+					property.setPropertyValue(newProperty.getPropertyValue());
+					IDocumentTextNode textNode = property.getTextNode();
+					if (textNode != null) {
+						property.removeTextNode();
+						if (property.isInTheModel() && property.isEditable()) {
+							model.fireModelChanged(new ModelChangedEvent(model, IModelChangedEvent.REMOVE, new Object[] { textNode }, null));
+						}
+					}
+				} else {
+					removeAttribute(property, IDSConstants.ATTRIBUTE_PROPERTY_VALUE, null);
+					String content = property.getPropertyElemBody();
+					if (content == null || !newContent.equals(normalizePropertyElemBody(content))) {
+						property.setPropertyElemBody(newContent);
+					}
+				}
+			}
+
 			int firstPos = propElements.length == 0
 					? 0	// insert first property element as first child of component
 							: component.indexOf(propElements[0]);
 			removeChildren(component, propMap.values());
 
-			addOrMoveChildren(component, new ArrayList<IDSProperty>(map.values()), firstPos);
+			addOrMoveChildren(component, propList, firstPos);
 		}
 
 		IDSProperties[] propFileElements = component.getPropertiesElements();
@@ -790,6 +821,7 @@ class AnnotationVisitor extends ASTVisitor {
 				IDSProperties propertiesElement = propFileMap.remove(propertyFile);
 				if (propertiesElement == null) {
 					propertiesElement = dsFactory.createProperties();
+					propertiesElement.setInTheModel(false); // note: workaround for PDE bug
 					propertiesElement.setEntry(propertyFile);
 				}
 
@@ -846,7 +878,7 @@ class AnnotationVisitor extends ASTVisitor {
 			addOrMoveChildren(service, provideList, firstPos);
 
 			if (serviceFactory == null) {
-				removeAttribute(service, IDSConstants.ATTRIBUTE_SERVICE_FACTORY);
+				removeAttribute(service, IDSConstants.ATTRIBUTE_SERVICE_FACTORY, IDSConstants.VALUE_FALSE);
 			} else {
 				service.setServiceFactory(serviceFactory.booleanValue());
 			}
@@ -948,25 +980,25 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 
 		if (activate == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_ACTIVATE);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_ACTIVATE, "activate"); //$NON-NLS-1$
 		} else {
 			component.setActivateMethod(activate);
 		}
 
 		if (deactivate == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_DEACTIVATE);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_DEACTIVATE, "deactivate"); //$NON-NLS-1$
 		} else {
 			component.setDeactivateMethod(deactivate);
 		}
 
 		if (modified == null) {
-			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_MODIFIED);
+			removeAttribute(component, IDSConstants.ATTRIBUTE_COMPONENT_MODIFIED, null);
 		} else {
 			component.setModifiedeMethod(modified);
 		}
 
 		if (configPid == null) {
-			removeAttribute(component, ATTRIBUTE_COMPONENT_CONFIGURATION_PID);
+			removeAttribute(component, ATTRIBUTE_COMPONENT_CONFIGURATION_PID, null);
 		} else {
 			component.setXMLAttribute(ATTRIBUTE_COMPONENT_CONFIGURATION_PID, configPid);
 			requiresV12 = true;
@@ -978,13 +1010,17 @@ class AnnotationVisitor extends ASTVisitor {
 			// references must be declared in ascending lexicographical order of their names
 			Collections.sort(references, REF_NAME_COMPARATOR);
 
-			// insert first reference element after service element, or (if not present) last property or properties
 			int firstPos;
-			service = component.getService();
-			if (service == null) {
-				firstPos = Math.max(0, indexOfLastPropertyOrProperties(component));
+			if (refElements.length == 0) {
+				// insert first reference element after service element, or (if not present) last property or properties
+				service = component.getService();
+				if (service == null) {
+					firstPos = Math.max(0, indexOfLastPropertyOrProperties(component));
+				} else {
+					firstPos = component.indexOf(service) + 1;
+				}
 			} else {
-				firstPos = component.indexOf(service) + 1;
+				firstPos = component.indexOf(refElements[0]);
 			}
 
 			removeChildren(component, refMap.values());
@@ -1017,9 +1053,14 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 	}
 
-	private void removeAttribute(IDSObject obj, String name) {
+	private void removeAttribute(IDSObject obj, String name, String defaultValue) {
 		IDocumentAttributeNode attrNode = obj.getDocumentAttribute(name);
 		if (attrNode != null) {
+			// only remove if value is not default
+			String value = attrNode.getAttributeValue();
+			if (value != null && value.equals(defaultValue))
+				return;
+
 			obj.removeDocumentAttribute(attrNode);
 			if (obj.isInTheModel() && obj.isEditable()) {
 				obj.getModel().fireModelChanged(new ModelChangedEvent(obj.getModel(), ModelChangedEvent.REMOVE, new Object[] { attrNode }, null));
@@ -1128,6 +1169,35 @@ class AnnotationVisitor extends ASTVisitor {
 		return pos;
 	}
 
+	private String normalizePropertyElemBody(String content) {
+		StringBuilder buf = new StringBuilder(content.length());
+		BufferedReader reader = new BufferedReader(new StringReader(content));
+		try {
+			String line;
+			while ((line = reader.readLine()) != null) {
+				String trimmed = line.trim();
+				if (trimmed.length() == 0)
+					continue;
+
+				if (buf.length() > 0)
+					buf.append('\n');
+
+				buf.append(trimmed);
+			}
+		} catch (IOException e) {
+			if (debug.isDebugging())
+				debug.trace("Error reading property element body.", e);
+		} finally {
+			try {
+				reader.close();
+			} catch (IOException e) {
+				// ignore
+			}
+		}
+
+		return buf.toString();
+	}
+
 	private void validateComponentName(Annotation annotation, String name, Collection<DSAnnotationProblem> problems) {
 		if (!errorLevel.isNone() && !PID_PATTERN.matcher(name).matches())
 			reportProblem(annotation, "name", problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentName, name), name); //$NON-NLS-1$
@@ -1155,17 +1225,17 @@ class AnnotationVisitor extends ASTVisitor {
 				reportProblem(annotation, "property", index, problems, Messages.AnnotationProcessor_invalidComponentProperty_valueRequired, name); //$NON-NLS-1$
 			} else {
 				try {
-					if (Long.class.getSimpleName().equals(type))
+					if (IDSConstants.VALUE_PROPERTY_TYPE_LONG.equals(type))
 						Long.valueOf(value);
-					else if (Double.class.getSimpleName().equals(type))
+					else if (IDSConstants.VALUE_PROPERTY_TYPE_DOUBLE.equals(type))
 						Double.valueOf(value);
-					else if (Float.class.getSimpleName().equals(type))
+					else if (IDSConstants.VALUE_PROPERTY_TYPE_FLOAT.equals(type))
 						Float.valueOf(value);
-					else if (Integer.class.getSimpleName().equals(type) || Character.class.getSimpleName().equals(type))
+					else if (IDSConstants.VALUE_PROPERTY_TYPE_INTEGER.equals(type) || IDSConstants.VALUE_PROPERTY_TYPE_CHAR.equals(type))
 						Integer.valueOf(value);
-					else if (Byte.class.getSimpleName().equals(type))
+					else if (IDSConstants.VALUE_PROPERTY_TYPE_BYTE.equals(type))
 						Byte.valueOf(value);
-					else if (Short.class.getSimpleName().equals(type))
+					else if (IDSConstants.VALUE_PROPERTY_TYPE_SHORT.equals(type))
 						Short.valueOf(value);
 				} catch (NumberFormatException e) {
 					reportProblem(annotation, "property", index, problems, NLS.bind(Messages.AnnotationProcessor_invalidComponentPropertyValue, type, value), String.valueOf(value)); //$NON-NLS-1$
@@ -1430,58 +1500,55 @@ class AnnotationVisitor extends ASTVisitor {
 		reference.setReferenceBind(methodName);
 
 		if (name == null) {
-			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_NAME);
+			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_NAME, null);
 		} else {
 			reference.setReferenceName(name);
 		}
 
 		if (service == null) {
-			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_INTERFACE);
+			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_INTERFACE, null);
 		} else {
 			reference.setReferenceInterface(service);
 		}
 
 		if (cardinality == null) {
-			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_CARDINALITY);
+			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_CARDINALITY, IDSConstants.VALUE_REFERENCE_CARDINALITY_ONE_ONE);
 		} else {
 			reference.setReferenceCardinality(cardinality);
 		}
 
 		if (policy == null) {
-			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_POLICY);
+			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_POLICY, IDSConstants.VALUE_REFERENCE_POLICY_STATIC);
 		} else {
 			reference.setReferencePolicy(policy);
 		}
 
 		if (target == null) {
-			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_TARGET);
+			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_TARGET, null);
 		} else {
 			reference.setReferenceTarget(target);
 		}
 
 		if (unbind == null) {
-			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_UNBIND);
+			removeAttribute(reference, IDSConstants.ATTRIBUTE_REFERENCE_UNBIND, null);
 		} else {
 			reference.setReferenceUnbind(unbind);
 		}
 
-		boolean requiresV12 = false;
-
 		if (policyOption == null) {
-			removeAttribute(reference, ATTRIBUTE_REFERENCE_POLICY_OPTION);
+			removeAttribute(reference, ATTRIBUTE_REFERENCE_POLICY_OPTION, VALUE_REFERENCE_POLICY_OPTION_RELUCTANT);
 		} else {
 			reference.setXMLAttribute(ATTRIBUTE_REFERENCE_POLICY_OPTION, policyOption);
-			requiresV12 = true;
 		}
 
 		if (updated == null) {
-			removeAttribute(reference, ATTRIBUTE_REFERENCE_UPDATED);
+			removeAttribute(reference, ATTRIBUTE_REFERENCE_UPDATED, null);
 		} else {
 			reference.setXMLAttribute(ATTRIBUTE_REFERENCE_UPDATED, updated);
-			requiresV12 = true;
 		}
 
-		return requiresV12;
+		return reference.getDocumentAttribute(ATTRIBUTE_REFERENCE_POLICY_OPTION) != null
+				|| reference.getDocumentAttribute(ATTRIBUTE_REFERENCE_UPDATED) != null;
 	}
 
 	private ITypeBinding getObjectType(AST ast, ITypeBinding primitive) {
