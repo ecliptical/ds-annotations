@@ -16,13 +16,15 @@ import java.util.Collections;
 import java.util.List;
 
 import org.eclipse.core.resources.IResource;
-import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.resources.ProjectScope;
 import org.eclipse.core.runtime.FileLocator;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.preferences.IScopeContext;
+import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jdt.core.IAccessRule;
 import org.eclipse.jdt.core.IClasspathAttribute;
 import org.eclipse.jdt.core.IClasspathEntry;
@@ -49,21 +51,22 @@ public class DSAnnotationClasspathContributor implements IClasspathContributor {
 			IPluginModelBase model = PluginRegistry.findModel(project);
 			if (model != null) {
 				IResource resource = model.getUnderlyingResource();
-				try {
-					if (resource != null && resource.getProject().hasNature(JavaCore.NATURE_ID)) {
+				if (resource != null) {
+					boolean autoClasspath = Platform.getPreferencesService().getBoolean(Activator.PREFS_QUALIFIER, Constants.PREF_CLASSPATH, true, new IScopeContext[] { new ProjectScope(resource.getProject()), InstanceScope.INSTANCE });
+					if (autoClasspath) {
 						Bundle bundle = ctx.getBundle();
-						URL fileURL = FileLocator.toFileURL(bundle.getEntry("annotations.jar")); //$NON-NLS-1$
-						if ("file".equals(fileURL.getProtocol())) { //$NON-NLS-1$
-							URL srcFileURL = FileLocator.toFileURL(bundle.getEntry("annotationssrc.zip")); //$NON-NLS-1$
-							IPath srcPath = "file".equals(srcFileURL.getProtocol()) ? new Path(srcFileURL.getPath()) : null; //$NON-NLS-1$
-							IClasspathEntry entry = JavaCore.newLibraryEntry(new Path(fileURL.getPath()), srcPath, Path.ROOT, ANNOTATION_ACCESS_RULES, DS_ATTRS, false);
-							return Collections.singletonList(entry);
+						try {
+							URL fileURL = FileLocator.toFileURL(bundle.getEntry("annotations.jar")); //$NON-NLS-1$
+							if ("file".equals(fileURL.getProtocol())) { //$NON-NLS-1$
+								URL srcFileURL = FileLocator.toFileURL(bundle.getEntry("annotationssrc.zip")); //$NON-NLS-1$
+								IPath srcPath = "file".equals(srcFileURL.getProtocol()) ? new Path(srcFileURL.getPath()) : null; //$NON-NLS-1$
+								IClasspathEntry entry = JavaCore.newLibraryEntry(new Path(fileURL.getPath()), srcPath, Path.ROOT, ANNOTATION_ACCESS_RULES, DS_ATTRS, false);
+								return Collections.singletonList(entry);
+							}
+						} catch (IOException e) {
+							Platform.getLog(Activator.getContext().getBundle()).log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error creating classpath entry.", e)); //$NON-NLS-1$
 						}
 					}
-				} catch (CoreException e) {
-					Platform.getLog(Activator.getContext().getBundle()).log(e.getStatus());
-				} catch (IOException e) {
-					Platform.getLog(Activator.getContext().getBundle()).log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error creating classpath entry.", e)); //$NON-NLS-1$
 				}
 			}
 		}

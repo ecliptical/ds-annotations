@@ -118,6 +118,8 @@ public class Messages extends NLS {
 
 	public static String DSAnnotationPreferenceListener_taskName;
 
+	public static String DSAnnotationPropertyPage_classpathCheckbox_text;
+
 	public static String DSAnnotationPropertyPage_enableCheckbox_text;
 
 	public static String DSAnnotationPropertyPage_errorLevelError;
@@ -137,6 +139,8 @@ public class Messages extends NLS {
 	public static String DSAnnotationPropertyPage_projectCheckbox_text;
 
 	public static String DSAnnotationPropertyPage_workspaceLink_text;
+
+	public static String ProjectClasspathPreferenceChangeListener_jobName;
 
 	static {
 		// initialize resource bundle

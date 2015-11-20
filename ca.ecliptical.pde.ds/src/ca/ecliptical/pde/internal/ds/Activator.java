@@ -10,8 +10,13 @@
  *******************************************************************************/
 package ca.ecliptical.pde.internal.ds;
 
+import java.util.HashMap;
+
+import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
+
+import ca.ecliptical.pde.ds.classpath.Constants;
 
 public class Activator extends AbstractUIPlugin {
 
@@ -21,6 +26,8 @@ public class Activator extends AbstractUIPlugin {
 	public static final String PREF_ENABLED = "enabled"; //$NON-NLS-1$
 
 	public static final String PREF_PATH = "path"; //$NON-NLS-1$
+
+	public static final String PREF_CLASSPATH = Constants.PREF_CLASSPATH;
 
 	public static final String PREF_VALIDATION_ERROR_LEVEL = "validationErrorLevel"; //$NON-NLS-1$
 
@@ -32,6 +39,8 @@ public class Activator extends AbstractUIPlugin {
 	private static Activator plugin;
 
 	private DSAnnotationPreferenceListener dsPrefListener;
+
+	private final HashMap<IJavaProject, ProjectClasspathPreferenceChangeListener> projectPrefListeners = new HashMap<IJavaProject, ProjectClasspathPreferenceChangeListener>();
 
 	/*
 	 * (non-Javadoc)
@@ -53,6 +62,14 @@ public class Activator extends AbstractUIPlugin {
 	public void stop(BundleContext context) throws Exception {
 		dsPrefListener.dispose();
 
+		synchronized (projectPrefListeners) {
+			for (ProjectClasspathPreferenceChangeListener listener : projectPrefListeners.values()) {
+				listener.dispose();
+			}
+
+			projectPrefListeners.clear();
+		}
+
 		plugin = null;
 		super.stop(context);
 	}
@@ -64,5 +81,20 @@ public class Activator extends AbstractUIPlugin {
 	 */
 	public static Activator getDefault() {
 		return plugin;
+	}
+
+	void listenForClasspathPreferenceChanges(IJavaProject project) {
+		synchronized (projectPrefListeners) {
+			if (!projectPrefListeners.containsKey(project))
+				projectPrefListeners.put(project, new ProjectClasspathPreferenceChangeListener(project));
+		}
+	}
+
+	void disposeProjectClasspathPreferenceChangeListener(IJavaProject project) {
+		synchronized (projectPrefListeners) {
+			ProjectClasspathPreferenceChangeListener listener = projectPrefListeners.remove(project);
+			if (listener != null)
+				listener.dispose();
+		}
 	}
 }

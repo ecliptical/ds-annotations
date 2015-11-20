@@ -18,6 +18,8 @@ public class Activator implements BundleActivator {
 	// The plug-in ID
 	public static final String PLUGIN_ID = "ca.ecliptical.pde.ds.classpath"; //$NON-NLS-1$
 
+	static final String PREFS_QUALIFIER = "ca.ecliptical.pde.ds"; //$NON-NLS-1$
+
 	private static BundleContext context;
 
 	static BundleContext getContext() {

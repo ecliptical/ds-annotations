@@ -39,6 +39,7 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.QualifiedName;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.preferences.IPreferencesService;
 import org.eclipse.core.runtime.preferences.IScopeContext;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jdt.core.IClasspathAttribute;
@@ -48,6 +49,7 @@ import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IPackageFragment;
 import org.eclipse.jdt.core.IPackageFragmentRoot;
+import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.compiler.BuildContext;
@@ -97,14 +99,26 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 	@Override
 	public boolean isActive(IJavaProject project) {
-		boolean enabled = Platform.getPreferencesService().getBoolean(Activator.PLUGIN_ID, Activator.PREF_ENABLED, true, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		IPreferencesService prefs = Platform.getPreferencesService();
+		boolean enabled = prefs.getBoolean(Activator.PLUGIN_ID, Activator.PREF_ENABLED, true, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
 		if (!enabled)
 			return false;
 
 		if (!PDE.hasPluginNature(project.getProject()))
 			return false;
 
-		return true;
+		boolean autoClasspath = prefs.getBoolean(Activator.PLUGIN_ID, Activator.PREF_CLASSPATH, true, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		if (autoClasspath)
+			return true;
+
+		try {
+			IType annotationType = project.findType(COMPONENT_ANNOTATION);
+			return annotationType != null && annotationType.isAnnotation();
+		} catch (JavaModelException e) {
+			Activator.getDefault().getLog().log(e.getStatus());
+		}
+
+		return false;
 	}
 
 	@Override
@@ -125,13 +139,14 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			result = NEEDS_FULL_BUILD;
 		}
 
-		String path = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_PATH, Activator.DEFAULT_PATH, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		IPreferencesService prefs = Platform.getPreferencesService();
+		String path = prefs.getString(Activator.PLUGIN_ID, Activator.PREF_PATH, Activator.DEFAULT_PATH, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
 		if (!path.equals(state.getPath())) {
 			state.setPath(path);
 			result = NEEDS_FULL_BUILD;
 		}
 
-		String errorLevelStr = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.toString(), new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		String errorLevelStr = prefs.getString(Activator.PLUGIN_ID, Activator.PREF_VALIDATION_ERROR_LEVEL, ValidationErrorLevel.error.toString(), new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
 		ValidationErrorLevel errorLevel = getEnumValue(errorLevelStr, ValidationErrorLevel.class, ValidationErrorLevel.error);
 
 		if (errorLevel != state.getErrorLevel()) {
@@ -139,13 +154,15 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			result = NEEDS_FULL_BUILD;
 		}
 
-		String missingUnbindMethodLevelStr = Platform.getPreferencesService().getString(Activator.PLUGIN_ID, Activator.PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL, errorLevelStr, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
+		String missingUnbindMethodLevelStr = prefs.getString(Activator.PLUGIN_ID, Activator.PREF_MISSING_UNBIND_METHOD_ERROR_LEVEL, errorLevelStr, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
 		ValidationErrorLevel missingUnbindMethodLevel = getEnumValue(missingUnbindMethodLevelStr, ValidationErrorLevel.class, errorLevel);
 
 		if (missingUnbindMethodLevel != state.getMissingUnbindMethodLevel()) {
 			state.setMissingUnbindMethodLevel(missingUnbindMethodLevel);
 			result = NEEDS_FULL_BUILD;
 		}
+
+		Activator.getDefault().listenForClasspathPreferenceChanges(project);
 
 		return result;
 	}

@@ -13,4 +13,6 @@ package ca.ecliptical.pde.ds.classpath;
 public interface Constants {
 
 	String CP_ATTRIBUTE = "ca.ecliptical.pde.ds.annotations.cp"; //$NON-NLS-1$
+
+	String PREF_CLASSPATH = "classpath"; //$NON-NLS-1$
 }
