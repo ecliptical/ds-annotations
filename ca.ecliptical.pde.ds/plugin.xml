@@ -158,5 +158,23 @@
             type="org.eclipse.jdt.core.IParent">
       </propertyTester>
    </extension>
+   <extension
+         id="buildpath_problem"
+         name="%buildpathProblem.marker.name"
+         point="org.eclipse.core.resources.markers">
+      <super
+            type="org.eclipse.core.resources.problemmarker">
+      </super>
+      <persistent
+            value="true">
+      </persistent>
+   </extension>
+   <extension
+         point="org.eclipse.ui.ide.markerResolution">
+      <markerResolutionGenerator
+            class="ca.ecliptical.pde.internal.ds.BuildPathMarkerResolutionGenerator"
+            markerType="ca.ecliptical.pde.ds.buildpath_problem">
+      </markerResolutionGenerator>
+   </extension>
 
 </plugin>

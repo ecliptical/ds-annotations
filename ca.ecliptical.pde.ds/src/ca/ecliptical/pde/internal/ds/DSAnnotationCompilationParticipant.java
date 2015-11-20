@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 
 import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ProjectScope;
@@ -40,10 +41,13 @@ import org.eclipse.core.runtime.QualifiedName;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.preferences.IScopeContext;
 import org.eclipse.core.runtime.preferences.InstanceScope;
+import org.eclipse.jdt.core.IClasspathAttribute;
+import org.eclipse.jdt.core.IClasspathEntry;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
-import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.IPackageFragment;
+import org.eclipse.jdt.core.IPackageFragmentRoot;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.compiler.BuildContext;
@@ -65,6 +69,8 @@ import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.service.component.annotations.Component;
 
+import ca.ecliptical.pde.ds.classpath.Constants;
+
 @SuppressWarnings("restriction")
 public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
@@ -72,9 +78,13 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 
 	static final String COMPONENT_ANNOTATION = Component.class.getName();
 
+	static final String ANNOTATIONS_PACKAGE = COMPONENT_ANNOTATION.substring(0, COMPONENT_ANNOTATION.lastIndexOf('.'));
+
 	private static final QualifiedName PROP_STATE = new QualifiedName(Activator.PLUGIN_ID, "state"); //$NON-NLS-1$
 
 	private static final String STATE_FILENAME = "state.dat"; //$NON-NLS-1$
+
+	static final String BUILDPATH_PROBLEM_MARKER = "ca.ecliptical.pde.ds.buildpath_problem"; //$NON-NLS-1$
 
 	private static final Debug debug = Debug.getDebug("ds-annotation-builder"); //$NON-NLS-1$
 
@@ -94,14 +104,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		if (!PDE.hasPluginNature(project.getProject()))
 			return false;
 
-		try {
-			IType annotationType = project.findType(COMPONENT_ANNOTATION);
-			return annotationType != null && annotationType.isAnnotation();
-		} catch (JavaModelException e) {
-			Activator.getDefault().getLog().log(e.getStatus());
-		}
-
-		return false;
+		return true;
 	}
 
 	@Override
@@ -260,7 +263,53 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 					retained.addAll(dsKeys);
 			}
 
-			abandoned.removeAll(retained);
+			try {
+				IMarker[] cpMarkers = project.getProject().findMarkers(BUILDPATH_PROBLEM_MARKER, false, IResource.DEPTH_ZERO);
+
+				if (retained.isEmpty()) {
+					for (IMarker marker : cpMarkers) {
+						marker.delete();
+					}
+				} else {
+					abandoned.removeAll(retained);
+
+					// check if we need a permanent annotations classpath entry
+					boolean markerNeeded = false;
+					IPackageFragmentRoot[] roots = project.getPackageFragmentRoots();
+					for (int i = roots.length - 1; i >= 0; --i) {
+						IPackageFragmentRoot root = roots[i];
+						IPackageFragment fragment = root.getPackageFragment(ANNOTATIONS_PACKAGE);
+						if (fragment.exists()) {
+							IClasspathEntry entry = root.getResolvedClasspathEntry();
+							IClasspathAttribute[] attrs = entry.getExtraAttributes();
+							for (IClasspathAttribute attr : attrs) {
+								if (Constants.CP_ATTRIBUTE.equals(attr.getName()) && Boolean.parseBoolean(attr.getValue())) {
+									markerNeeded = true;
+									break;
+								}
+							}
+
+							break;
+						}
+					}
+
+					if (markerNeeded) {
+						if (cpMarkers.length == 0) {
+							IMarker marker = project.getProject().createMarker(BUILDPATH_PROBLEM_MARKER);
+							marker.setAttribute(IMarker.SEVERITY, IMarker.SEVERITY_WARNING);
+							marker.setAttribute(IMarker.PRIORITY, IMarker.PRIORITY_HIGH);
+							marker.setAttribute(IMarker.MESSAGE, Messages.DSAnnotationCompilationParticipant_buildpathProblemMarker_message);
+							marker.setAttribute(IMarker.LOCATION, Messages.DSAnnotationCompilationParticipant_buildpathProblemMarker_location);
+						}
+					} else {
+						for (IMarker marker : cpMarkers) {
+							marker.delete();
+						}
+					}
+				}
+			} catch (CoreException e) {
+				Activator.getDefault().getLog().log(e.getStatus());
+			}
 
 			if (projectContext.isChanged()) {
 				try {

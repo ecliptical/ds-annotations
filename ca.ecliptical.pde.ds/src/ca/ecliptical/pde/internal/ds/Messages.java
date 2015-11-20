@@ -88,6 +88,18 @@ public class Messages extends NLS {
 
 	public static String AnnotationProcessor_unknownServiceTypeLabel;
 
+	public static String BuildPathMarkerResolutionGenerator_additionalBundleResolution_description;
+
+	public static String BuildPathMarkerResolutionGenerator_additionalBundleResolution_label;
+
+	public static String BuildPathMarkerResolutionGenerator_extraLibraryResolution_description;
+
+	public static String BuildPathMarkerResolutionGenerator_extraLibraryResolution_label;
+
+	public static String BuildPathMarkerResolutionGenerator_packageImportResolution_description;
+
+	public static String BuildPathMarkerResolutionGenerator_packageImportResolution_label;
+
 	public static String ComponentMoveParticipant_name;
 
 	public static String ComponentRefactoringHelper_checkConditionsTaskLabel;
@@ -97,6 +109,10 @@ public class Messages extends NLS {
 	public static String ComponentRefactoringHelper_topLevelChangeLabel;
 
 	public static String ComponentRenameParticipant_name;
+
+	public static String DSAnnotationCompilationParticipant_buildpathProblemMarker_location;
+
+	public static String DSAnnotationCompilationParticipant_buildpathProblemMarker_message;
 
 	public static String DSAnnotationPreferenceListener_jobName;
 
