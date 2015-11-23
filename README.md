@@ -2,7 +2,7 @@
 
 OSGi Declarative Services offer a powerful mechanism for developing complex, service-oriented applications. However, Eclipse PDE tooling to support this functionality has been lacking.
 
-This project delivers an Eclipse plugin with the ability to automatically generate and update DS Component Definition files from appropriately annotated source code. It does this without adding any custom builders to your project. In addition to generating/updating the descriptor files it also maintains the bundle's MANIFEST.MF and build.properties file.
+This project delivers an Eclipse plug-in with the ability to automatically generate and update DS Component Definition files from appropriately annotated source code. It does this without adding any custom builders to your project. In addition to generating/updating the descriptor files it also maintains the bundle's MANIFEST.MF and build.properties file.
 
 ## Installation
 
@@ -16,12 +16,12 @@ Individual projects may override these settings in the project's _Properties -> 
 
 ## Usage
 
-Make sure package org.osgi.service.component.annotations is in your PDE Plug-in project's classpath<a href="#classpath">*</a> and annotate your component implementation classes with @Component and related annotations. The DS Annotations Support plug-in will do the rest.
+In a PDE Plug-in project, simply annotate your component implementation classes with @Component and related annotations; the DS Annotations Support plug-in will do the rest<a href="#classpath">*</a>.
 
 Note that the descriptor files generated from source annotations are overwritten on every source change; however, manually created descriptor files (i.e., those that are not generated from annotated classes) are left unchanged. Thus it is possible to combine automated generation with manually created and maintained descriptors.
 
 -----
-<a name="classpath" id="classpath">*</a> There are several ways to make DS annotations available to your code. E.g.,
+<a name="classpath" id="classpath">*</a> By default the plug-in makes DS Annotation types available to all PDE Plug-in projects in the workspace. However, you must make sure they are also added to your project's "permanent" build path used by external builders outside of the workbench. There are several ways to accomplish that. E.g.,
 
 *A. Additional bundle*: Add bundle _ca.ecliptical.pde.ds.lib_ under _Automated Management of Dependencies_ in your Plug-in Manifest Editor's _Dependencies_ tab.
 
