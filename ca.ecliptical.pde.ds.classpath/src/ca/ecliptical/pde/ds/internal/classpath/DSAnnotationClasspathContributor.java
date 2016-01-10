@@ -56,7 +56,7 @@ public class DSAnnotationClasspathContributor implements IClasspathContributor {
 					if (autoClasspath) {
 						Bundle bundle = ctx.getBundle();
 						try {
-							URL fileURL = FileLocator.toFileURL(bundle.getEntry("annotations.jar")); //$NON-NLS-1$
+							URL fileURL = FileLocator.toFileURL(bundle.getEntry("org.osgi.service.component.annotations-1.3.0.jar")); //$NON-NLS-1$
 							if ("file".equals(fileURL.getProtocol())) { //$NON-NLS-1$
 								URL srcFileURL = FileLocator.toFileURL(bundle.getEntry("annotationssrc.zip")); //$NON-NLS-1$
 								IPath srcPath = "file".equals(srcFileURL.getProtocol()) ? new Path(srcFileURL.getPath()) : null; //$NON-NLS-1$

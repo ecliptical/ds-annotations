@@ -84,6 +84,8 @@ public class Messages extends NLS {
 
 	public static String AnnotationProcessor_noImplicitReferenceUnbind;
 
+	public static String AnnotationProcessor_unknownServiceType;
+	
 	public static String AnnotationProcessor_stringOrEmpty;
 
 	public static String AnnotationProcessor_unknownServiceTypeLabel;
