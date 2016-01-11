@@ -677,9 +677,16 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 
 		String configPid = null;
-		if ((value = params.get("configurationPid")) instanceof String) { //$NON-NLS-1$
-			configPid = (String) value;
-			validateComponentConfigPID(annotation, configPid, problems);
+		if ((value = params.get("configurationPid")) instanceof String || value instanceof Object[]) { //$NON-NLS-1$
+			if (value instanceof String) {
+				value = new Object[]{value};
+			}
+			StringBuffer configurations = new StringBuffer();
+			for (Object pid : (Object[]) value) {
+				validateComponentConfigPID(annotation, pid.toString(), problems);
+				configurations.append(pid.toString()).append(" ");
+			}
+			configPid = configurations.toString().trim();
 		}
 
 		ServiceScope scope = null;
@@ -1106,7 +1113,7 @@ class AnnotationVisitor extends ASTVisitor {
 			xmlns = neededXmlns;
 		}
 
-		component.setNamespace(xmlns);
+		component.setNamespace(xmlns);   // Note: updates to the namespace do not work if no other changes!
 	}
 
 	private void removeChildren(IDSObject parent, Collection<? extends IDocumentElementNode> children) {
