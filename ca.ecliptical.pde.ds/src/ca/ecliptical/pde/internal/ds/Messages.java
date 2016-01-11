@@ -89,7 +89,13 @@ public class Messages extends NLS {
 	public static String AnnotationProcessor_stringOrEmpty;
 
 	public static String AnnotationProcessor_unknownServiceTypeLabel;
+	
+	public static String AnnotationProcessor_cardinalityMismatch;
 
+	public static String AnnotationProcessor_dynamicShouldBeVolatile;
+	
+	public static String AnnotationProcessor_referenceAndFinal;
+	
 	public static String BuildPathMarkerResolutionGenerator_additionalBundleResolution_description;
 
 	public static String BuildPathMarkerResolutionGenerator_additionalBundleResolution_label;

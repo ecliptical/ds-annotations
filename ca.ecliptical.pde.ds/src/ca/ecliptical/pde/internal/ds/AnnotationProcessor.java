@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -122,12 +123,14 @@ import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.FieldOption;
 import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.component.annotations.ReferenceScope;
+import org.osgi.service.component.annotations.ServiceScope;
 
 @SuppressWarnings("restriction")
 public class AnnotationProcessor extends ASTRequestor {
@@ -679,6 +682,12 @@ class AnnotationVisitor extends ASTVisitor {
 			validateComponentConfigPID(annotation, configPid, problems);
 		}
 
+		ServiceScope scope = null;
+		if ((value = params.get("scope")) instanceof IVariableBinding) {
+			IVariableBinding scopeBinding = (IVariableBinding) value;
+			scope = ServiceScope.valueOf(scopeBinding.getName());
+		}
+		
 		IDSComponent component = model.getDSComponent();
 
 		if (enabled == null) {
@@ -711,6 +720,13 @@ class AnnotationVisitor extends ASTVisitor {
 			component.setConfigurationPolicy(configPolicy);
 		}
 
+		if (scope == null) {
+			removeAttribute(component, "scope", null);
+		}
+		else {
+			component.setXMLAttribute("scope", scope.toString());
+		}
+		
 		IDSDocumentFactory dsFactory = model.getFactory();
 
 		IDSProperty[] propElements = component.getPropertyElements();
@@ -911,6 +927,7 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 
 		// Process the field declarations to get the field injection points.
+		// We actually should process the protected fields from super classes as well, but we don't.
 		for (FieldDeclaration field : type.getFields()) {
 			for (Object modifier : field.modifiers()) {
 				if (!(modifier instanceof Annotation))
@@ -1449,8 +1466,7 @@ class AnnotationVisitor extends ASTVisitor {
 		return params;
 	}
 	
-	private static String cardinality(Map<String, Object> params) {
-		String cardinality = null;
+	private static ReferenceCardinality _cardinality(Map<String, Object> params) {
 		ReferenceCardinality cardinalityLiteral = null;
 		Object value = params.get("cardinality");
 		if (value instanceof IVariableBinding) {
@@ -1460,34 +1476,48 @@ class AnnotationVisitor extends ASTVisitor {
 		else if (value instanceof ReferenceCardinality) {
 			cardinalityLiteral = (ReferenceCardinality) value;
 		}
+		return cardinalityLiteral;
+	}
+	
+	private static String cardinality(Map<String, Object> params) {
+		ReferenceCardinality cardinalityLiteral = _cardinality(params);
 		if (cardinalityLiteral != null)
-			cardinality = cardinalityLiteral.toString();
-		return cardinality;
+			return cardinalityLiteral.toString();
+		return null;
+	}
+	
+	private static ReferencePolicy _policy(Map<String, Object> params) {
+		Object value;
+		ReferencePolicy policyLiteral = null;
+		if ((value = params.get("policy")) instanceof IVariableBinding) { //$NON-NLS-1$
+			IVariableBinding policyBinding = (IVariableBinding) value;
+			policyLiteral = ReferencePolicy.valueOf(policyBinding.getName());
+		}
+		return policyLiteral;
 	}
 	
 	private static String policy(Map<String, Object> params) {
-		String policy = null;
+		ReferencePolicy policyLiteral = _policy(params);
+		if (policyLiteral == null) return null;
+		return policyLiteral.toString();
+	}
+	
+	private static ReferencePolicyOption _referencePolicyOption(Map<String, Object> params) {
 		Object value;
-		if ((value = params.get("policy")) instanceof IVariableBinding) { //$NON-NLS-1$
-			IVariableBinding policyBinding = (IVariableBinding) value;
-			ReferencePolicy policyLiteral = ReferencePolicy.valueOf(policyBinding.getName());
-			if (policyLiteral != null)
-				policy = policyLiteral.toString();
+		ReferencePolicyOption policyOptionLiteral = null;
+		if ((value = params.get("policyOption")) instanceof IVariableBinding) { //$NON-NLS-1$
+			IVariableBinding policyOptionBinding = (IVariableBinding) value;
+			policyOptionLiteral = ReferencePolicyOption.valueOf(policyOptionBinding.getName());
 		}
-		return policy;
+		return policyOptionLiteral;
 	}
 	
 	private static String referencePolicyOption(Map<String, Object> params) {
-		String policyOption = null;
-		Object value;
-		if ((value = params.get("policyOption")) instanceof IVariableBinding) { //$NON-NLS-1$
-			IVariableBinding policyOptionBinding = (IVariableBinding) value;
-			ReferencePolicyOption policyOptionLiteral = ReferencePolicyOption.valueOf(policyOptionBinding.getName());
-			if (policyOptionLiteral != null) {
-				policyOption = policyOptionLiteral.toString();
-			}
+		ReferencePolicyOption policyOptionLiteral = _referencePolicyOption(params);
+		if (policyOptionLiteral != null) {
+			return policyOptionLiteral.toString();
 		}
-		return policyOption;
+		return null;
 	}
 	
 	private String target(Map<String, Object> params, Annotation annotation, Collection<DSAnnotationProblem> problems) {
@@ -1588,14 +1618,19 @@ class AnnotationVisitor extends ASTVisitor {
 		if (scope != null) {
 			reference.setXMLAttribute("scope", scope);
 		}
+		else {
+			removeAttribute(reference, "scope", null);
+		}
 		return reference;
 	}
 	
-	private Type containedType(Type type) {
+	private Type containedType(Type type, int index) {
 		Type contained = null;
 		if (type.isParameterizedType()) {
 			ParameterizedType thisType = (ParameterizedType) type;
-			contained = (Type) thisType.typeArguments().get(0);
+			if (thisType.typeArguments().size() > index) {
+				contained = (Type) thisType.typeArguments().get(index);
+			}
 		}
 		return contained;
 	}
@@ -1611,14 +1646,15 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 		else  if (ServiceReference.class.getName().equals(containedName)) {
 			fieldCollectionType = "reference";
-			serviceType = containedType(type);
+			serviceType = containedType(type, 0);
 		}
 		else if (Map.Entry.class.getName().equals(containedName)) {
 			fieldCollectionType = "tuple";
+			serviceType = containedType(type, 1);
 		} 
-		else if ("org.osgi.service.component.ComponentServiceObject".equals(containedName)) {
+		else if ("org.osgi.service.component.ComponentServiceObjects".equals(containedName)) {
 			fieldCollectionType = "serviceobjects";
-			serviceType = containedType(type);
+			serviceType = containedType(type, 0);
 		}
 		else {
 			serviceType = type;
@@ -1646,7 +1682,7 @@ class AnnotationVisitor extends ASTVisitor {
 		boolean isCollection = false;
 		try {
 			ITypeHierarchy typeHierarchy = itype.newTypeHierarchy(new NullProgressMonitor());
-			for (IType t : typeHierarchy.getSuperInterfaces(itype)) {
+			for (IType t : typeHierarchy.getAllInterfaces()) {
 				if (t.getFullyQualifiedName().equals(Collection.class.getName())) {
 					isCollection = true;
 				}
@@ -1655,18 +1691,36 @@ class AnnotationVisitor extends ASTVisitor {
 			exc.printStackTrace();
 		}
 		StringBuffer fieldCollectionType = new StringBuffer();
+		ReferenceCardinality cardinality = _cardinality(params);
 		if (isCollection) {
-			if (cardinality(params) == null) {
+			if (ReferenceCardinality.MANDATORY.equals(cardinality)) {
+				reportProblem(annotation, "cardinality", ValidationErrorLevel.warning, problems, 
+						NLS.bind(Messages.AnnotationProcessor_cardinalityMismatch, cardinality.toString()));
+			}
+			else if (cardinality == null) {
 				params.put("cardinality", ReferenceCardinality.AT_LEAST_ONE);
 			}
 			// Collection type. Check whether it is a parameterized type with one parameter containing the
 			// service type or one of the other options for injecting a service.
-			defaultService = getFieldCollectionType(containedType(type), fieldCollectionType);
+			defaultService = getFieldCollectionType(containedType(type, 0), fieldCollectionType);
 		}
 		else {
 			// No collection. If it is not one of the known types, like service reference, etc.,
 			// just get the type of the field itself.
 			defaultService = getFieldCollectionType(type, null);
+			if (EnumSet.of(ReferenceCardinality.AT_LEAST_ONE, ReferenceCardinality.MULTIPLE).contains(cardinality)) {
+				reportProblem(annotation, "cardinality", ValidationErrorLevel.error, problems, 
+						NLS.bind(Messages.AnnotationProcessor_cardinalityMismatch, cardinality.toString()));
+			}
+		}
+		// Dynamic fields should be marked volatile.
+		if (ReferencePolicy.DYNAMIC.equals(_policy(params)) && (field.getModifiers() & Modifier.VOLATILE) == 0) {
+			reportProblem(annotation, "policy", ValidationErrorLevel.error, problems, 
+					Messages.AnnotationProcessor_dynamicShouldBeVolatile);
+		}
+		if ((field.getModifiers() & Modifier.FINAL) != 0) {
+			reportProblem(annotation, "policy", ValidationErrorLevel.error, problems, 
+					Messages.AnnotationProcessor_referenceAndFinal);
 		}
 		// Check the service specification. If the service is specified, this is the easiest solution, since the programmer
 		// specifies what the service is.
@@ -1699,6 +1753,21 @@ class AnnotationVisitor extends ASTVisitor {
 			reference.setXMLAttribute("field", fieldName);
 			if (fieldCollectionType.length() > 0) {
 				reference.setXMLAttribute("field-collection-type", fieldCollectionType.toString());
+			}
+			else {
+				removeAttribute(reference, "field-collection-type", null);
+			}
+			FieldOption fieldOption = null;
+			Object value = params.get("fieldOption");
+			if (value instanceof IVariableBinding) {
+				IVariableBinding scopeBinding = (IVariableBinding) value;
+				fieldOption = FieldOption.valueOf(scopeBinding.getName());
+			}
+			if (fieldOption != null && FieldOption.UPDATE.equals(fieldOption)) {
+				reference.setXMLAttribute("field-option", fieldOption.toString());
+			}
+			else {
+				removeAttribute(reference, "field-option", null);
 			}
 		}
 	}
