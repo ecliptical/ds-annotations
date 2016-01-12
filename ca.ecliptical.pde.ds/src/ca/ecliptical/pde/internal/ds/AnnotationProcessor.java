@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.StringReader;
-import org.eclipse.jdt.core.dom.ParameterizedType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -35,7 +34,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 
-import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.core.filebuffers.FileBuffers;
 import org.eclipse.core.filebuffers.ITextFileBuffer;
 import org.eclipse.core.filebuffers.ITextFileBufferManager;
@@ -55,7 +53,6 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaElement;
-import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.ITypeHierarchy;
 import org.eclipse.jdt.core.compiler.BuildContext;
@@ -81,7 +78,9 @@ import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.NormalAnnotation;
+import org.eclipse.jdt.core.dom.ParameterizedType;
 import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
+import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jface.text.BadLocationException;
@@ -587,6 +586,9 @@ class AnnotationVisitor extends ASTVisitor {
 	}
 
 	private void processComponent(IDSModel model, TypeDeclaration type, ITypeBinding typeBinding, Annotation annotation, IAnnotationBinding annotationBinding, Map<String, ?> params, String name, String implClass, Collection<DSAnnotationProblem> problems) {
+		// The required version of the DS specification. Defaults to 1, meaning: v1.1.0
+		int requiredVersion = 1;
+		
 		Object value;
 		Collection<String> services;
 		if ((value = params.get("service")) instanceof Object[]) { //$NON-NLS-1$
@@ -678,15 +680,22 @@ class AnnotationVisitor extends ASTVisitor {
 
 		String configPid = null;
 		if ((value = params.get("configurationPid")) instanceof String || value instanceof Object[]) { //$NON-NLS-1$
+			Object[] pids;
 			if (value instanceof String) {
-				value = new Object[]{value};
+				pids = new Object[]{value};
+			}
+			else {
+				pids = (Object[]) value;
 			}
 			StringBuffer configurations = new StringBuffer();
-			for (Object pid : (Object[]) value) {
+			for (Object pid : pids) {
 				validateComponentConfigPID(annotation, pid.toString(), problems);
 				configurations.append(pid.toString()).append(" ");
 			}
 			configPid = configurations.toString().trim();
+			if (pids.length > 1) {
+				requiredVersion = Math.max(requiredVersion, 3);
+			}
 		}
 
 		ServiceScope scope = null;
@@ -916,7 +925,6 @@ class AnnotationVisitor extends ASTVisitor {
 			}
 		}
 
-		int requiredVersion = 1;
 		String activate = null;
 		Annotation activateAnnotation = null;
 		String deactivate = null;
