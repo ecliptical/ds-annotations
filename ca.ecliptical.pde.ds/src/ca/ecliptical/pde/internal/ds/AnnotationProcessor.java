@@ -1765,6 +1765,14 @@ class AnnotationVisitor extends ASTVisitor {
 		return reference;
 	}
 	
+	private static ITypeBinding bindingExcludingObject(Type type) {
+		ITypeBinding b = type.resolveBinding();
+		if (b == null || b.getBinaryName().equals("java.lang.Object")) {
+			b = null;
+		}
+		return b;
+	}
+	
 	/*
 	 * Get the contained type for a parameterized type. This to determine the service type from the parameterized
 	 * indications.
@@ -1775,6 +1783,9 @@ class AnnotationVisitor extends ASTVisitor {
 			ParameterizedType thisType = (ParameterizedType) type;
 			if (thisType.typeArguments().size() > index) {
 				contained = (Type) thisType.typeArguments().get(index);
+				if (bindingExcludingObject(contained) == null) {
+					contained = null;
+				}
 			}
 		}
 		return contained;
@@ -1786,7 +1797,7 @@ class AnnotationVisitor extends ASTVisitor {
 	 */
 	private ITypeBinding getFieldCollectionType(Type type, StringBuffer fct) {
 		if (type == null) return null;
-		ITypeBinding binding = type.resolveBinding();
+		ITypeBinding binding = bindingExcludingObject(type);
 		if (binding == null) return null;
 		String containedName = binding.getBinaryName();
 		Type serviceType = null;
@@ -1812,7 +1823,7 @@ class AnnotationVisitor extends ASTVisitor {
 		if (fieldCollectionType != null && fct != null) {
 			fct.append(fieldCollectionType);
 		}
-		return (serviceType == null) ? null : serviceType.resolveBinding();
+		return (serviceType == null) ? null : bindingExcludingObject(serviceType);
 	}
 	
 	/*
@@ -1902,7 +1913,7 @@ class AnnotationVisitor extends ASTVisitor {
 			else {
 				ITypeBinding serviceType = (ITypeBinding) s;
 				// Check the type compatibility and report a problem if not.
-				if (!defaultService.isAssignmentCompatible(serviceType)) {
+				if (defaultService != null && !defaultService.isAssignmentCompatible(serviceType)) {
 					reportProblem(annotation, "service", problems, 
 							NLS.bind(Messages.AnnotationProcessor_invalidReferenceService, 
 									defaultService.getName(), serviceType.getName()));
