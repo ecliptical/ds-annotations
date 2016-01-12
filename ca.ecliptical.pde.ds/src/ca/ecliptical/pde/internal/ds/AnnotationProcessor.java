@@ -1454,7 +1454,6 @@ class AnnotationVisitor extends ASTVisitor {
 									property.setPropertyType(null);
 								}
 							}
-							System.out.println(property);
 							defaultValues.put(property.getPropertyName(), property);
 						}
 					}
