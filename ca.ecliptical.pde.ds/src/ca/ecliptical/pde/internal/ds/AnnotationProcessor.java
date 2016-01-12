@@ -59,6 +59,7 @@ import org.eclipse.jdt.core.compiler.BuildContext;
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTRequestor;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
@@ -175,16 +176,29 @@ public class AnnotationProcessor extends ASTRequestor {
 		}
 
 		if (!problems.isEmpty()) {
-			char[] filename = source.getResource().getFullPath().toString().toCharArray();
-			for (DSAnnotationProblem problem : problems) {
-				problem.setOriginatingFileName(filename);
-				if (problem.getSourceStart() >= 0)
-					problem.setSourceLineNumber(ast.getLineNumber(problem.getSourceStart()));
+			// Remap the problems by compilation unit.
+			Map<CompilationUnit, List<DSAnnotationProblem>> remapped = new HashMap<CompilationUnit, List<DSAnnotationProblem>>();
+			for (DSAnnotationProblem p : problems) {
+				List<DSAnnotationProblem> thisUnit = remapped.get(p.getUnit());
+				if (thisUnit == null) {
+					thisUnit = new ArrayList<DSAnnotationProblem>();
+					remapped.put(p.getUnit(), thisUnit);
+				}
+				thisUnit.add(p);
 			}
-
-			BuildContext buildContext = fileMap.get(source);
-			if (buildContext != null)
-				buildContext.recordNewProblems(problems.toArray(new CategorizedProblem[problems.size()]));
+			for (Map.Entry<CompilationUnit, List<DSAnnotationProblem>> entry : remapped.entrySet()) {
+				ICompilationUnit iu = (ICompilationUnit) entry.getKey().getJavaElement();
+				char[] filename = iu.getResource().getFullPath().toString().toCharArray();
+				List<DSAnnotationProblem> thisProblems = entry.getValue();
+				for (DSAnnotationProblem problem : thisProblems) {
+					problem.setOriginatingFileName(filename);
+					if (problem.getSourceStart() >= 0)
+						problem.setSourceLineNumber(entry.getKey().getLineNumber(problem.getSourceStart()));
+				}
+				BuildContext buildContext = fileMap.get(iu);
+				if (buildContext != null)
+					buildContext.recordNewProblems(thisProblems.toArray(new CategorizedProblem[thisProblems.size()]));
+			}
 		}
 	}
 
@@ -942,26 +956,8 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 
 		// Process the field declarations to get the field injection points.
-		// We actually should process the protected fields from super classes as well, but we don't.
-		for (FieldDeclaration field : type.getFields()) {
-			for (Object modifier : field.modifiers()) {
-				if (!(modifier instanceof Annotation))
-					continue;
-				Annotation fieldAnnotation = (Annotation) modifier;
-				IAnnotationBinding fieldAnnotationBinding = fieldAnnotation.resolveAnnotationBinding();
-				if (fieldAnnotationBinding == null) {
-					if (debug.isDebugging())
-						debug.trace(String.format("Unable to resolve binding for annotation: %s", fieldAnnotation)); //$NON-NLS-1$
-					continue;
-				}
-				String annotationName = fieldAnnotationBinding.getAnnotationType().getQualifiedName();
-				if (REFERENCE_ANNOTATION.equals(annotationName)) {
-					requiredVersion = Math.max(requiredVersion, 3);
-					VariableDeclarationFragment fragment = (VariableDeclarationFragment) field.fragments().get(0);
-					processReference(field, fragment.getName().getIdentifier(), fieldAnnotation, fieldAnnotationBinding, 
-							refMap, dsFactory, references, referenceNames, problems);
-				}
-			}
+		if (processFieldReferences(type, false, refMap, dsFactory, references, referenceNames, problems).size() > 0) {
+			requiredVersion = Math.max(requiredVersion, 3);
 		}
 		
 		for (MethodDeclaration method : type.getMethods()) {
@@ -1481,6 +1477,62 @@ class AnnotationVisitor extends ASTVisitor {
 		return params;
 	}
 	
+	/*
+	 * Process the field references present for a type declaration. The annotations of the fields are processed and when
+	 * a reference annotation is found, it is passed down the reference processing.
+	 */
+	Collection<IDSReference> processFieldReferences(TypeDeclaration type, boolean checkAccessible, final Map<String, IDSReference> refMap, 
+			final IDSDocumentFactory factory, final Collection<IDSReference> references, 
+			final Map<String, Annotation> names, final Collection<DSAnnotationProblem> problems) {
+		final List<IDSReference> found = new ArrayList<IDSReference>();
+		int requiredVersion = 1;
+		for (FieldDeclaration field : type.getFields()) {
+			if (checkAccessible && (field.getModifiers() & (Modifier.PROTECTED | Modifier.PUBLIC)) == 0) continue;
+			for (Object modifier : field.modifiers()) {
+				if (!(modifier instanceof Annotation))
+					continue;
+				Annotation fieldAnnotation = (Annotation) modifier;
+				IAnnotationBinding fieldAnnotationBinding = fieldAnnotation.resolveAnnotationBinding();
+				if (fieldAnnotationBinding == null) {
+					if (debug.isDebugging())
+						debug.trace(String.format("Unable to resolve binding for annotation: %s", fieldAnnotation)); //$NON-NLS-1$
+					continue;
+				}
+				String annotationName = fieldAnnotationBinding.getAnnotationType().getQualifiedName();
+				if (REFERENCE_ANNOTATION.equals(annotationName)) {
+					requiredVersion = Math.max(requiredVersion, 3);
+					VariableDeclarationFragment fragment = (VariableDeclarationFragment) field.fragments().get(0);
+					IDSReference goodOne = processReference(field, fragment.getName().getIdentifier(), fieldAnnotation, fieldAnnotationBinding, 
+							refMap, factory, references, names, problems);
+					if (goodOne != null) {
+						found.add(goodOne);
+					}
+				}
+			}
+		}
+		// Now process the super class for any found references there (if we have a super type).
+		Type superT = type.getSuperclassType();
+		if (superT != null) {
+			final IType superType = (IType) superT.resolveBinding().getJavaElement();
+			ASTParser parser = ASTParser.newParser(AST.JLS4);
+		    parser.setResolveBindings(true);
+		    parser.setSource(superType.getCompilationUnit());
+		    ASTNode unitNode = parser.createAST(new NullProgressMonitor());
+		    unitNode.accept(new ASTVisitor() {
+				@Override
+				public boolean visit(TypeDeclaration node) {
+					if (node.resolveBinding().getQualifiedName().equals(superType.getFullyQualifiedName())) {
+						// Process the fields of this one as well. However, limit the fields to only the
+						// ones that are protected and public.
+						found.addAll(processFieldReferences(node, true, refMap, factory, references, names, problems));
+					}
+					return false;
+				}
+			});
+		}
+		return found;
+	}
+	
 	private static ReferenceCardinality _cardinality(Map<String, Object> params) {
 		ReferenceCardinality cardinalityLiteral = null;
 		Object value = params.get("cardinality");
@@ -1680,7 +1732,7 @@ class AnnotationVisitor extends ASTVisitor {
 		return (serviceType == null) ? null : serviceType.resolveBinding();
 	}
 	
-	private void processReference(FieldDeclaration field, String fieldName, 
+	private IDSReference processReference(FieldDeclaration field, String fieldName, 
 			Annotation annotation, IAnnotationBinding annotationBinding, Map<String, IDSReference> refMap, 
 			IDSDocumentFactory factory, Collection<IDSReference> collector, Map<String, Annotation> names, 
 			Collection<DSAnnotationProblem> problems) {
@@ -1704,6 +1756,7 @@ class AnnotationVisitor extends ASTVisitor {
 			}
 		} catch (Exception exc) {
 			exc.printStackTrace();
+			return null;
 		}
 		StringBuffer fieldCollectionType = new StringBuffer();
 		ReferenceCardinality cardinality = _cardinality(params);
@@ -1740,6 +1793,7 @@ class AnnotationVisitor extends ASTVisitor {
 		// Check the service specification. If the service is specified, this is the easiest solution, since the programmer
 		// specifies what the service is.
 		Object s = params.get("service");
+		IDSReference reference = null;
 		if (s == null && defaultService == null) {
 			reportProblem(annotation, "service", problems, Messages.AnnotationProcessor_unknownServiceType);
 		}
@@ -1761,7 +1815,7 @@ class AnnotationVisitor extends ASTVisitor {
 				serviceName = serviceType.getBinaryName();
 			}
 			// Create the service reference.
-			IDSReference reference = reference(fieldName, serviceName, 
+			reference = reference(fieldName, serviceName, 
 					annotation, params, refMap, factory, collector, names, problems);
 			// Add some attributes because of field injection. Note that these attributes
 			// are not yet known in the current eclipse version (Mars) and therefore used by hand.
@@ -1785,6 +1839,7 @@ class AnnotationVisitor extends ASTVisitor {
 				removeAttribute(reference, "field-option", null);
 			}
 		}
+		return reference;
 	}
 
 	private int processReference(MethodDeclaration method, IMethodBinding methodBinding, Annotation annotation, IAnnotationBinding annotationBinding, Map<String, IDSReference> refMap, IDSDocumentFactory factory, Collection<IDSReference> collector, Map<String, Annotation> names, Collection<DSAnnotationProblem> problems) {
@@ -2125,10 +2180,12 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 
 		if (start >= 0) {
-			DSAnnotationProblem problem = new DSAnnotationProblem(errorLevel.isError(), message, args);
+			DSAnnotationProblem problem = new DSAnnotationProblem((CompilationUnit) annotation.getRoot(), 
+					errorLevel.isError(), message, args);
 			problem.setSourceStart(start);
 			problem.setSourceEnd(start + length - 1);
 			problems.add(problem);
 		}
+
 	}
 }
