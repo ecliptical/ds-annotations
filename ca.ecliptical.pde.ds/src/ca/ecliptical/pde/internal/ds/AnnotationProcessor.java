@@ -176,7 +176,8 @@ public class AnnotationProcessor extends ASTRequestor {
 		}
 
 		if (!problems.isEmpty()) {
-			// Remap the problems by compilation unit.
+			// Remap the problems by compilation unit. We may have gotten problems from various
+			// sources and the problems should be shown with the correct file.
 			Map<CompilationUnit, List<DSAnnotationProblem>> remapped = new HashMap<CompilationUnit, List<DSAnnotationProblem>>();
 			for (DSAnnotationProblem p : problems) {
 				List<DSAnnotationProblem> thisUnit = remapped.get(p.getUnit());
@@ -186,7 +187,7 @@ public class AnnotationProcessor extends ASTRequestor {
 				}
 				thisUnit.add(p);
 			}
-			// Process the problems per file.
+			// Process the problems per file/compilation unit.
 			for (Map.Entry<CompilationUnit, List<DSAnnotationProblem>> entry : remapped.entrySet()) {
 				ICompilationUnit iu = (ICompilationUnit) entry.getKey().getJavaElement();
 				char[] filename = iu.getResource().getFullPath().toString().toCharArray();
@@ -890,10 +891,12 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 
 		IDSProperty[] propElements = component.getPropertyElements();
+		// If we don't have any properties, just remove them from the XML.
 		if (properties.length == 0 && defaultValues.size() == 0) {
 			removeChildren(component, Arrays.asList(propElements));
 		} else {
-			// build up new property elements
+			// build up new property elements. This are the property
+			// elements present in the @Component annotation.
 			LinkedHashMap<String, IDSProperty> map = new LinkedHashMap<String, IDSProperty>(properties.length);
 			for (int i = 0; i < properties.length; ++i) {
 				String propertyStr = properties[i];
@@ -952,9 +955,12 @@ class AnnotationVisitor extends ASTVisitor {
 				propMap.put(propElement.getPropertyName(), propElement);
 			}
 
-			// Merge the default values and overwrite them with the values in the component annotation.
+			// We now merge the default values from the configuration type properties with
+			// the values found in the component annotations. The latter overwrite the first.
 			Map<String, IDSProperty> actualProperties = new HashMap<String, IDSProperty>();
+			// Load the defaults.
 			actualProperties.putAll(defaultValues);
+			// Overwrite/add the properties from the annotation.
 			actualProperties.putAll(map);
 			ArrayList<IDSProperty> propList = new ArrayList<IDSProperty>(actualProperties.values());
 			for (ListIterator<IDSProperty> i = propList.listIterator(); i.hasNext();) {
@@ -970,7 +976,8 @@ class AnnotationVisitor extends ASTVisitor {
 					property.setPropertyType(newPropertyType);
 
 				String newContent = newProperty.getPropertyElemBody();
-				// Somehow, even if we set null to the body, it still can contain an empty string.
+				// Somehow, even if we set null to the body, it still can contain an empty string. Therefore, check
+				// on an empty string as well.
 				if (newContent == null || newContent.length() == 0) {
 					property.setPropertyValue(newProperty.getPropertyValue());
 					IDocumentTextNode textNode = property.getTextNode();
@@ -1543,32 +1550,32 @@ class AnnotationVisitor extends ASTVisitor {
 	}
 	
 	/*
-	 * Process the field references present for a type declaration. The annotations of the fields are processed and when
-	 * a reference annotation is found, it is passed down the reference processing.
+	 * Process the field references present for a type declaration. The fields are checked and if
+	 * a reference annotation is found, it is passed down the reference annotation processing.
 	 */
 	Collection<IDSReference> processFieldReferences(TypeDeclaration type, boolean checkAccessible, final Map<String, IDSReference> refMap, 
 			final IDSDocumentFactory factory, final Collection<IDSReference> references, 
 			final Map<String, Annotation> names, final Collection<DSAnnotationProblem> problems) {
+		// List we are going to return to our parent to show that we actually found references.
 		final List<IDSReference> found = new ArrayList<IDSReference>();
-		int requiredVersion = 1;
+		// Loop through the fields.
 		for (FieldDeclaration field : type.getFields()) {
+			// If we need to check the protect/public modifiers, do it. This is enabled for superclass parsing.
 			if (checkAccessible && (field.getModifiers() & (Modifier.PROTECTED | Modifier.PUBLIC)) == 0) continue;
 			for (Object modifier : field.modifiers()) {
 				if (!(modifier instanceof Annotation))
 					continue;
 				Annotation fieldAnnotation = (Annotation) modifier;
 				IAnnotationBinding fieldAnnotationBinding = fieldAnnotation.resolveAnnotationBinding();
-				if (fieldAnnotationBinding == null) {
-					if (debug.isDebugging())
-						debug.trace(String.format("Unable to resolve binding for annotation: %s", fieldAnnotation)); //$NON-NLS-1$
-					continue;
-				}
+				if (fieldAnnotationBinding == null) continue;
+				// Check if it is reference annotation.
 				String annotationName = fieldAnnotationBinding.getAnnotationType().getQualifiedName();
 				if (REFERENCE_ANNOTATION.equals(annotationName)) {
-					requiredVersion = Math.max(requiredVersion, 3);
+					// Process it.
 					VariableDeclarationFragment fragment = (VariableDeclarationFragment) field.fragments().get(0);
-					IDSReference goodOne = processReference(field, fragment.getName().getIdentifier(), fieldAnnotation, fieldAnnotationBinding, 
-							refMap, factory, references, names, problems);
+					IDSReference goodOne = processReference(field, fragment.getName().getIdentifier(), 
+							fieldAnnotation, fieldAnnotationBinding, refMap, factory, references, names, problems);
+					// If we found a valid reference, add it to the list to return.
 					if (goodOne != null) {
 						found.add(goodOne);
 					}
@@ -1578,6 +1585,7 @@ class AnnotationVisitor extends ASTVisitor {
 		// Now process the super class for any found references there (if we have a super type).
 		Type superT = type.getSuperclassType();
 		if (superT != null && superT.resolveBinding() != null) {
+			// We need to parse the file, so prepare it.
 			final IType superType = (IType) superT.resolveBinding().getJavaElement();
 			ASTParser parser = ASTParser.newParser(AST.JLS4);
 		    parser.setResolveBindings(true);
@@ -1757,6 +1765,10 @@ class AnnotationVisitor extends ASTVisitor {
 		return reference;
 	}
 	
+	/*
+	 * Get the contained type for a parameterized type. This to determine the service type from the parameterized
+	 * indications.
+	 */
 	private Type containedType(Type type, int index) {
 		Type contained = null;
 		if (type.isParameterizedType()) {
@@ -1767,10 +1779,15 @@ class AnnotationVisitor extends ASTVisitor {
 		}
 		return contained;
 	}
-	
+
+	/*
+	 * Parse the field collection type for a specific field type. All according to SCR 1.3, section 112.3.3
+	 * Returns both the service type (as return value) and the field collection type in the passed string buffer.
+	 */
 	private ITypeBinding getFieldCollectionType(Type type, StringBuffer fct) {
 		if (type == null) return null;
 		ITypeBinding binding = type.resolveBinding();
+		if (binding == null) return null;
 		String containedName = binding.getBinaryName();
 		Type serviceType = null;
 		String fieldCollectionType = null;
@@ -1798,6 +1815,11 @@ class AnnotationVisitor extends ASTVisitor {
 		return (serviceType == null) ? null : serviceType.resolveBinding();
 	}
 	
+	/*
+	 * Process a field declaration with a reference annotation. As indicated in the SCR specification v1.3,
+	 * fields can be either collection types (for multiple references) or single object types. Both types
+	 * are handled here, generating warnings and errors on the way.
+	 */
 	private IDSReference processReference(FieldDeclaration field, String fieldName, 
 			Annotation annotation, IAnnotationBinding annotationBinding, Map<String, IDSReference> refMap, 
 			IDSDocumentFactory factory, Collection<IDSReference> collector, Map<String, Annotation> names, 
@@ -1828,6 +1850,9 @@ class AnnotationVisitor extends ASTVisitor {
 		StringBuffer fieldCollectionType = new StringBuffer();
 		ReferenceCardinality cardinality = _cardinality(params);
 		if (isCollection) {
+			// If the cardinality specifies a 1..1 relation, we should generate a warning (the SCR handler
+			// probably will fail anyway). If no cardinality is specified, we assume at least one (1..n) since
+			// we are processing a collection. AFAIK not in the specifications, but seems logical.
 			if (ReferenceCardinality.MANDATORY.equals(cardinality)) {
 				reportProblem(annotation, "cardinality", ValidationErrorLevel.warning, problems, 
 						NLS.bind(Messages.AnnotationProcessor_cardinalityMismatch, cardinality.toString()));
@@ -1835,14 +1860,15 @@ class AnnotationVisitor extends ASTVisitor {
 			else if (cardinality == null) {
 				params.put("cardinality", ReferenceCardinality.AT_LEAST_ONE);
 			}
-			// Collection type. Check whether it is a parameterized type with one parameter containing the
-			// service type or one of the other options for injecting a service.
+			// Since it is a collection, we can check the type of the collection from the parameterized value (if present).
+			// This determines the collection type.
 			defaultService = getFieldCollectionType(containedType(type, 0), fieldCollectionType);
 		}
 		else {
 			// No collection. If it is not one of the known types, like service reference, etc.,
 			// just get the type of the field itself.
 			defaultService = getFieldCollectionType(type, null);
+			// We cannot have a multiple relation here.
 			if (EnumSet.of(ReferenceCardinality.AT_LEAST_ONE, ReferenceCardinality.MULTIPLE).contains(cardinality)) {
 				reportProblem(annotation, "cardinality", ValidationErrorLevel.error, problems, 
 						NLS.bind(Messages.AnnotationProcessor_cardinalityMismatch, cardinality.toString()));
@@ -1853,12 +1879,14 @@ class AnnotationVisitor extends ASTVisitor {
 			reportProblem(annotation, "policy", ValidationErrorLevel.error, problems, 
 					Messages.AnnotationProcessor_dynamicShouldBeVolatile);
 		}
+		// Impossible to have a final modifier since it cannot be replaced then.
 		if ((field.getModifiers() & Modifier.FINAL) != 0) {
 			reportProblem(annotation, "policy", ValidationErrorLevel.error, problems, 
 					Messages.AnnotationProcessor_referenceAndFinal);
 		}
 		// Check the service specification. If the service is specified, this is the easiest solution, since the programmer
-		// specifies what the service is.
+		// specifies what the service is. If this one is unavailable and we could not determine the service
+		// type above, report and issue.
 		Object s = params.get("service");
 		IDSReference reference = null;
 		if (s == null && defaultService == null) {
@@ -1885,7 +1913,8 @@ class AnnotationVisitor extends ASTVisitor {
 			reference = reference(fieldName, serviceName, 
 					annotation, params, refMap, factory, collector, names, problems);
 			// Add some attributes because of field injection. Note that these attributes
-			// are not yet known in the current eclipse version (Mars) and therefore used by hand.
+			// are not known by the IDS stuff in the current version, and are therefore created by hand
+			// in stead of convenience methods. 
 			reference.setXMLAttribute("field", fieldName);
 			if (fieldCollectionType.length() > 0) {
 				reference.setXMLAttribute("field-collection-type", fieldCollectionType.toString());
@@ -1893,6 +1922,7 @@ class AnnotationVisitor extends ASTVisitor {
 			else {
 				removeAttribute(reference, "field-collection-type", null);
 			}
+			// Field option: do we want the field replaced or updated? Only works for collections.
 			FieldOption fieldOption = null;
 			Object value = params.get("fieldOption");
 			if (value instanceof IVariableBinding) {
@@ -1900,6 +1930,15 @@ class AnnotationVisitor extends ASTVisitor {
 				fieldOption = FieldOption.valueOf(scopeBinding.getName());
 			}
 			if (fieldOption != null && FieldOption.UPDATE.equals(fieldOption)) {
+				if (!isCollection) {
+					reportProblem(annotation, "fieldOption", ValidationErrorLevel.error, problems, 
+							Messages.AnnotationProcessor_updateOnlyForCollections);
+				}
+				ReferencePolicy policy = _policy(params);
+				if (!ReferencePolicy.DYNAMIC.equals(policy)) {
+					reportProblem(annotation, "fieldOption", ValidationErrorLevel.error, problems, 
+							Messages.AnnotationProcessor_updateOnlyForDynamic);
+				}
 				reference.setXMLAttribute("field-option", fieldOption.toString());
 			}
 			else {

@@ -95,6 +95,10 @@ public class Messages extends NLS {
 	public static String AnnotationProcessor_dynamicShouldBeVolatile;
 	
 	public static String AnnotationProcessor_referenceAndFinal;
+
+	public static String AnnotationProcessor_updateOnlyForCollections;
+	
+	public static String AnnotationProcessor_updateOnlyForDynamic;
 	
 	public static String BuildPathMarkerResolutionGenerator_additionalBundleResolution_description;
 
