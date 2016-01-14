@@ -23,19 +23,21 @@ Note that the descriptor files generated from source annotations are overwritten
 -----
 <a name="classpath" id="classpath">*</a> By default the plug-in makes DS Annotation types available to all PDE Plug-in projects in the workspace. However, you must make sure they are also added to your project's "permanent" build path used by external builders outside of the workbench. There are several ways to accomplish that. E.g.,
 
-*A. Additional bundle*: Add bundle _ca.ecliptical.pde.ds.lib_ under _Automated Management of Dependencies_ in your Plug-in Manifest Editor's _Dependencies_ tab.
+*A. Additional bundle*: Add bundle _ca.ecliptical.pde.ds.classpath_ under _Automated Management of Dependencies_ in your Plug-in Manifest Editor's _Dependencies_ tab.
 
 *B. Extra library*: Add the following line to your Plug-in project's build.properties file:
 
-	extra.. = platform:/plugin/ca.ecliptical.pde.ds.lib/annotations.jar
+	extra.. = platform:/plugin/ca.ecliptical.pde.ds.classpath/org.osgi.service.component.annotations-1.3.0.jar
 
 > Or: 
 
-	jars.extra.classpath = platform:/plugin/ca.ecliptical.pde.ds.lib/annotations.jar
+	jars.extra.classpath = platform:/plugin/ca.ecliptical.pde.ds.classpath/org.osgi.service.component.annotations-1.3.0.jar
+
+or any other platform:/ URL pointing to the annotations jar file.
 
 See [PDE documentation](http://help.eclipse.org/luna/index.jsp?topic=%2Forg.eclipse.pde.doc.user%2Freference%2Fpde_feature_generating_build.htm "Feature and Plug-in Build Configuration Properties") for more details.
 
-*C. Import package*: In your Plug-in Manifest Editor's _Dependencies_ tab import package _org.osgi.service.component.annotations_ and mark it as optional. This is the least preferred option as it unnecessarily modifies your bundle's runtime classpath (in META-INF/MANIFEST.MF).
+*C. Import package*: In your Plug-in Manifest Editor's _Dependencies_ tab import package _org.osgi.service.component.annotations_ and mark it as optional. This is the least preferred option as it unnecessarily modifies your bundle's runtime classpath (in META-INF/MANIFEST.MF). Note that in this case, you need to add the correct SCR version annotation package to your target environment.
 
 ## License
 
