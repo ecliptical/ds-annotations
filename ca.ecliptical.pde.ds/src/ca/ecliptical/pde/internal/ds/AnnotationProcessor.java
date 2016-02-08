@@ -1582,28 +1582,6 @@ class AnnotationVisitor extends ASTVisitor {
 				}
 			}
 		}
-		// Now process the super class for any found references there (if we have a super type).
-		Type superT = type.getSuperclassType();
-		if (superT != null && superT.resolveBinding() != null) {
-			// We need to parse the file, so prepare it.
-			final IType superType = (IType) superT.resolveBinding().getJavaElement();
-			ASTParser parser = ASTParser.newParser(AST.JLS4);
-		    parser.setResolveBindings(true);
-		    parser.setSource(superType.getCompilationUnit());
-		    ASTNode unitNode = parser.createAST(new NullProgressMonitor());
-		    unitNode.accept(new ASTVisitor() {
-				@Override
-				public boolean visit(TypeDeclaration node) {
-					ITypeBinding thisType = node.resolveBinding();
-					if (thisType != null && thisType.getQualifiedName().equals(superType.getFullyQualifiedName())) {
-						// Process the fields of this one as well. However, limit the fields to only the
-						// ones that are protected and public.
-						found.addAll(processFieldReferences(node, true, refMap, factory, references, names, problems));
-					}
-					return false;
-				}
-			});
-		}
 		return found;
 	}
 	
