@@ -60,6 +60,7 @@ import org.eclipse.pde.core.IBaseModel;
 import org.eclipse.pde.core.build.IBuildEntry;
 import org.eclipse.pde.core.build.IBuildModel;
 import org.eclipse.pde.core.build.IBuildModelFactory;
+import org.eclipse.pde.internal.core.WorkspaceModelManager;
 import org.eclipse.pde.internal.core.ibundle.IBundleModel;
 import org.eclipse.pde.internal.core.ibundle.IBundlePluginModelBase;
 import org.eclipse.pde.internal.core.natures.PDE;
@@ -105,6 +106,9 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			return false;
 
 		if (!PDE.hasPluginNature(project.getProject()))
+			return false;
+
+		if (WorkspaceModelManager.isBinaryProject(project.getProject()))
 			return false;
 
 		boolean autoClasspath = prefs.getBoolean(Activator.PLUGIN_ID, Activator.PREF_CLASSPATH, true, new IScopeContext[] { new ProjectScope(project.getProject()), InstanceScope.INSTANCE });
@@ -357,7 +361,8 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 			if (!deleteStatuses.isEmpty())
 				Activator.getDefault().getLog().log(new MultiStatus(Activator.PLUGIN_ID, 0, deleteStatuses.toArray(new IStatus[deleteStatuses.size()]), "Error deleting generated files.", null)); //$NON-NLS-1$
 
-			updateProject(project.getProject(), retained, abandoned);
+			if (!retained.isEmpty() || !abandoned.isEmpty())
+				updateProject(project.getProject(), retained, abandoned);
 		}
 
 		if (debug.isDebugging())
