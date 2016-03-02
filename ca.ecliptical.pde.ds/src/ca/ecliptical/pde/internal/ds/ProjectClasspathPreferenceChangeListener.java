@@ -78,7 +78,7 @@ public class ProjectClasspathPreferenceChangeListener implements IPreferenceChan
 					try {
 						initializer.requestClasspathContainerUpdate(PDECore.REQUIRED_PLUGINS_CONTAINER_PATH, project, new RequiredPluginsClasspathContainer(model, ClasspathUtilCore.getBuild(model)));
 					} catch (CoreException e) {
-						Activator.getDefault().getLog().log(e.getStatus());
+						Activator.log(e);
 					}
 				}
 			}

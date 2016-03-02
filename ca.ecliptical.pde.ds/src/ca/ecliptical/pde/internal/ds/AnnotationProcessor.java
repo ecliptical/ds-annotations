@@ -223,7 +223,7 @@ public class AnnotationProcessor extends ASTRequestor {
 		try {
 			ensureDSProject(project);
 		} catch (CoreException e) {
-			Activator.getDefault().getLog().log(e.getStatus());
+			Activator.log(e);
 		}
 	}
 }
@@ -350,7 +350,7 @@ class AnnotationVisitor extends ASTVisitor {
 						try {
 							processComponent(type, typeBinding, annotation, annotationBinding, problems);
 						} catch (CoreException e) {
-							Activator.getDefault().getLog().log(e.getStatus());
+							Activator.log(e);
 						}
 					}
 				}
@@ -461,7 +461,7 @@ class AnnotationVisitor extends ASTVisitor {
 				try {
 					oldFile.move(file.getFullPath(), true, true, null);
 				} catch (CoreException e) {
-					Activator.getDefault().getLog().log(new Status(IStatus.WARNING, Activator.PLUGIN_ID, String.format("Unable to move model file from '%s' to '%s'.", oldPath, file.getFullPath()), e)); //$NON-NLS-1$
+					Activator.log(new Status(IStatus.WARNING, Activator.PLUGIN_ID, String.format("Unable to move model file from '%s' to '%s'.", oldPath, file.getFullPath()), e)); //$NON-NLS-1$
 				}
 			}
 		}
