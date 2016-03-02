@@ -33,11 +33,13 @@ import org.eclipse.osgi.service.resolver.BundleDescription;
 import org.eclipse.pde.core.IClasspathContributor;
 import org.eclipse.pde.core.plugin.IPluginModelBase;
 import org.eclipse.pde.core.plugin.PluginRegistry;
+import org.eclipse.pde.internal.core.WorkspaceModelManager;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 
 import ca.ecliptical.pde.ds.classpath.Constants;
 
+@SuppressWarnings("restriction")
 public class DSAnnotationClasspathContributor implements IClasspathContributor {
 
 	// private static final IAccessRule[] ANNOTATION_ACCESS_RULES = { JavaCore.newAccessRule(new Path("org/osgi/service/component/annotations/*"), IAccessRule.K_DISCOURAGED | IAccessRule.IGNORE_IF_BETTER) };
@@ -51,7 +53,7 @@ public class DSAnnotationClasspathContributor implements IClasspathContributor {
 			IPluginModelBase model = PluginRegistry.findModel(project);
 			if (model != null) {
 				IResource resource = model.getUnderlyingResource();
-				if (resource != null) {
+				if (resource != null && !WorkspaceModelManager.isBinaryProject(resource.getProject())) {
 					boolean autoClasspath = Platform.getPreferencesService().getBoolean(Activator.PREFS_QUALIFIER, Constants.PREF_CLASSPATH, true, new IScopeContext[] { new ProjectScope(resource.getProject()), InstanceScope.INSTANCE });
 					if (autoClasspath) {
 						Bundle bundle = ctx.getBundle();
@@ -64,7 +66,7 @@ public class DSAnnotationClasspathContributor implements IClasspathContributor {
 								return Collections.singletonList(entry);
 							}
 						} catch (IOException e) {
-							Platform.getLog(Activator.getContext().getBundle()).log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error creating classpath entry.", e)); //$NON-NLS-1$
+							Platform.getLog(bundle).log(new Status(IStatus.ERROR, Activator.PLUGIN_ID, "Error creating classpath entry.", e)); //$NON-NLS-1$
 						}
 					}
 				}
