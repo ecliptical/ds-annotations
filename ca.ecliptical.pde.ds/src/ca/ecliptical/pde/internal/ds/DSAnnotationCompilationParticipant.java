@@ -105,7 +105,7 @@ public class DSAnnotationCompilationParticipant extends CompilationParticipant {
 		if (!enabled)
 			return false;
 
-		if (project.getProject().isOpen() && !PDE.hasPluginNature(project.getProject()))
+		if (!project.getProject().isOpen() || !PDE.hasPluginNature(project.getProject()))
 			return false;
 
 		if (WorkspaceModelManager.isBinaryProject(project.getProject()))
