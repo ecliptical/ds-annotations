@@ -11,6 +11,7 @@
 package ca.ecliptical.pde.internal.ds;
 
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 
 public class DSAnnotationProblem extends CategorizedProblem {
 
@@ -28,10 +29,13 @@ public class DSAnnotationProblem extends CategorizedProblem {
 
 	private int sourceLineNumber;
 
-	public DSAnnotationProblem(boolean error, String message, String... args) {
+	private CompilationUnit unit;
+	
+	public DSAnnotationProblem(CompilationUnit unit, boolean error, String message, String... args) {
 		this.error = error;
 		this.message = message;
 		this.args = args;
+		this.unit = unit;
 	}
 
 	public boolean isError() {
@@ -94,5 +98,9 @@ public class DSAnnotationProblem extends CategorizedProblem {
 
 	public void setSourceLineNumber(int sourceLineNumber) {
 		this.sourceLineNumber = sourceLineNumber;
+	}
+	
+	public CompilationUnit getUnit() {
+		return unit;
 	}
 }
