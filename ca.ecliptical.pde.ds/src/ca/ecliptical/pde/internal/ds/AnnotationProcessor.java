@@ -59,7 +59,6 @@ import org.eclipse.jdt.core.compiler.BuildContext;
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTRequestor;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
@@ -754,13 +753,6 @@ class AnnotationVisitor extends ASTVisitor {
 			component.setConfigurationPolicy(configPolicy);
 		}
 
-		if (scope == null) {
-			removeAttribute(component, "scope", null);
-		}
-		else {
-			component.setXMLAttribute("scope", scope.toString());
-		}
-		
 		IDSDocumentFactory dsFactory = model.getFactory();
 
 		String activate = null;
@@ -1078,6 +1070,12 @@ class AnnotationVisitor extends ASTVisitor {
 				removeAttribute(service, IDSConstants.ATTRIBUTE_SERVICE_FACTORY, IDSConstants.VALUE_FALSE);
 			} else {
 				service.setServiceFactory(serviceFactory.booleanValue());
+			}
+			if (scope == null) {
+				removeAttribute(service, "scope", null);
+			}
+			else {
+				service.setXMLAttribute("scope", scope.toString());
 			}
 		}
 
